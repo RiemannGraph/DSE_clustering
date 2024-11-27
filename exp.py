@@ -8,7 +8,7 @@ from geoopt.optim import RiemannianAdam
 from utils.eval_utils import decoding_cluster_from_tree, cluster_metrics, cal_AUC_AP
 from utils.plot_utils import plot_leaves, plot_nx_graph
 from utils.decode import construct_tree, to_networkx_tree
-from dataset import load_data, mask_edges
+from dataset import load_data
 from utils.train_utils import EarlyStopping
 from logger import create_logger
 from manifold.poincare import Poincare
@@ -41,10 +41,10 @@ class Exp:
         aps = []
         for exp_iter in range(self.configs.exp_iters):
             logger.info(f"\ntrain iters {exp_iter}")
-            model = HyperSE(in_features=data['num_features'],
+            model = HyperSE(in_features=data.x.shape[1],
                             hidden_features=self.configs.hidden_dim,
                             hidden_dim_enc=self.configs.hidden_dim_enc,
-                            num_nodes=data['num_nodes'],
+                            num_nodes=data.x.shape[0],
                             height=self.configs.height, temperature=self.configs.temperature,
                             embed_dim=self.configs.embed_dim, dropout=self.configs.dropout,
                             nonlin=self.configs.nonlin,
@@ -55,18 +55,9 @@ class Exp:
                 nmi, ari = self.train_clu(data, model, optimizer, logger, device, exp_iter)
                 total_nmi.append(nmi)
                 total_ari.append(ari)
-            if self.configs.task == 'LP':
-                _, test_auc, test_ap = self.train_lp(data, model, optimizer, logger, device)
-                logger.info(
-                    f"test_auc={test_auc * 100: .2f}%, test_ap={test_ap * 100: .2f}%")
-                aucs.append(test_auc)
-                aps.append(test_ap)
         if self.configs.task == 'Clustering':
             logger.info(f"NMI: {np.mean(total_nmi)}+-{np.std(total_nmi)}, "
                         f"ARI: {np.mean(total_ari)}+-{np.std(total_ari)}")
-        if self.configs.task == 'LP':
-            logger.info(f"test AUC: {np.mean(aucs)}~{np.std(aucs)}")
-            logger.info(f"test AP: {np.mean(aps)}~{np.std(aps)}")
 
     def train_clu(self, data, model, optimizer, logger, device, exp_iter):
         best_cluster_result = {}
@@ -76,7 +67,7 @@ class Exp:
         n_cluster_trials = self.configs.n_cluster_trials
         for epoch in range(1, self.configs.epochs + 1):
             model.train()
-            loss = model.loss(data, data['edge_index'], device)
+            loss = model.loss(data, device)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -89,17 +80,18 @@ class Exp:
                 embeddings = model(data, device).detach().cpu()
                 manifold = model.manifold.cpu()
                 # decode_time = time.time()
-                tree = construct_tree(torch.tensor([i for i in range(data['num_nodes'])]).long(),
-                                      manifold,
-                                      model.embeddings, model.ass_mat, height=self.configs.height,
-                                      num_nodes=embeddings.shape[0])
-                decode_time = time.time() - decode_time
-                logger.info(f"Decoding cost time: {decode_time: .3f} s")
-                tree_graph = to_networkx_tree(tree, manifold, height=self.configs.height)
-                predicts = decoding_cluster_from_tree(manifold, tree_graph,
-                                                      data['num_classes'], data['num_nodes'],
-                                                      height=self.configs.height)
-                trues = data['labels']
+                # tree = construct_tree(torch.tensor([i for i in range(data.x.shape[0])]).long(),
+                #                       manifold,
+                #                       model.embeddings, model.ass_mat, height=self.configs.height,
+                #                       num_nodes=embeddings.shape[0])
+                # decode_time = time.time() - decode_time
+                # logger.info(f"Decoding cost time: {decode_time: .3f} s")
+                # tree_graph = to_networkx_tree(tree, manifold, height=self.configs.height)
+                # predicts = decoding_cluster_from_tree(manifold, tree_graph,
+                #                                       data['num_classes'], data.x.shape[0],
+                #                                       height=self.configs.height)
+                predicts = model.ass_mat[1].argmax(1).cpu().numpy()
+                trues = data.y.cpu().numpy()
                 acc, nmi, f1, ari = [], [], [], []
                 for step in range(n_cluster_trials):
                     metrics = cluster_metrics(trues, predicts)
@@ -158,56 +150,3 @@ class Exp:
             logger.info(
                 f"Best Results according to {k}: ACC: {acc}, NMI: {nmi}, F1: {f1}, ARI: {ari} \n")
         return best_cluster['nmi'], best_cluster["ari"]
-
-    def train_lp(self, data, model, optimizer, logger, device):
-        val_prop = 0.05
-        test_prop = 0.1
-        pos_edges, neg_edges = mask_edges(data['edge_index'], data['neg_edge_index'], val_prop, test_prop)
-        decoder = FermiDiracDecoder(self.configs.r, self.configs.t).to(device)
-        best_ap = 0
-        early_stop_count = 0
-        # time_before_train = time.time()
-        for epoch in range(1, self.configs.epochs + 1):
-            t = time.time()
-            model.train()
-            optimizer.zero_grad()
-            neg_edge_train = neg_edges[0][:, np.random.randint(0, neg_edges[0].shape[1], pos_edges[0].shape[1])]
-            loss = model.loss(data, data['edge_index'], device)
-            embeddings = model(data, device)
-            auc, ap = self.cal_lp_loss(model.manifold, embeddings, decoder, pos_edges[0], neg_edge_train)
-            loss.backward()
-            optimizer.step()
-            logger.info(
-                f"Epoch {epoch}: train_loss={loss.item()}, train_AUC={auc}, train_AP={ap}, time={time.time() - t}")
-            if epoch % self.configs.eval_freq == 0:
-                model.eval()
-                val_loss = model.loss(data, data['edge_index'], neg_edges[1], device)
-                auc, ap = self.cal_lp_loss(model.manifold, embeddings, decoder, pos_edges[1], neg_edges[1])
-                logger.info(f"Epoch {epoch}: val_loss={val_loss.item()}, val_AUC={auc}, val_AP={ap}")
-                if ap > best_ap:
-                    early_stop_count = 0
-                    best_ap = ap
-                    embeds = embeddings.detach().cpu().numpy()
-                    # np.save(self.configs.save_embeds, embeds)
-                else:
-                    early_stop_count += 1
-                if early_stop_count >= self.configs.patience:
-                    break
-        # avg_train_time = (time.time() - time_before_train) / epoch
-        # time_str = f"Average Time: {avg_train_time} s/epoch"
-        # logger.info(time_str)
-        # time_str = f"{self.configs.downstream_task}_{self.configs.dataset}_{time_str}\n"
-        # with open('time.txt', 'a') as f:
-        #     f.write(time_str)
-        # f.close()
-        test_loss = model.loss(data, data['edge_index'], neg_edges[2], device)
-        test_auc, test_ap = self.cal_lp_loss(model.manifold, embeddings, decoder, pos_edges[2], neg_edges[2])
-        return test_loss, test_auc, test_ap
-
-    def cal_lp_loss(self, manifold, embeddings, decoder, pos_edges, neg_edges):
-        pos_scores = decoder(manifold.dist(embeddings[pos_edges[0]], embeddings[pos_edges[1]]))
-        neg_scores = decoder(manifold.dist(embeddings[neg_edges[0]], embeddings[neg_edges[1]]))
-        label = [1] * pos_scores.shape[0] + [0] * neg_scores.shape[0]
-        preds = list(pos_scores.detach().cpu().numpy()) + list(neg_scores.detach().cpu().numpy())
-        auc, ap = cal_AUC_AP(preds, label)
-        return auc, ap

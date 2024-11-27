@@ -21,7 +21,7 @@ parser.add_argument('--dataset', type=str, default='Cora')
 parser.add_argument('--task', type=str, default='Clustering',
                     choices=['Clustering'])
 parser.add_argument('--root_path', type=str, default='datasets')
-parser.add_argument('--eval_freq', type=int, default=10)
+parser.add_argument('--eval_freq', type=int, default=5)
 parser.add_argument('--exp_iters', type=int, default=5)
 parser.add_argument('--version', type=str, default="run")
 parser.add_argument('--log_path', type=str, default="./results/FootBall.log")
@@ -54,11 +54,11 @@ configs = parser.parse_args()
 # with open(f'./configs/{configs.dataset}.json', 'wt') as f:
 #     json.dump(vars(configs), f, indent=4)
 
-configs_dict = vars(configs)
-with open(f'./configs/{configs.dataset}.json', 'rt') as f:
-    configs_dict.update(json.load(f))
-configs = DotDict(configs_dict)
-f.close()
+# configs_dict = vars(configs)
+# with open(f'./configs/{configs.dataset}.json', 'rt') as f:
+#     configs_dict.update(json.load(f))
+# configs = DotDict(configs_dict)
+# f.close()
 
 log_path = f"./results/{configs.version}/{configs.dataset}.log"
 configs.log_path = log_path

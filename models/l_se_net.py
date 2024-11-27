@@ -35,7 +35,6 @@ class LSENet(nn.Module):
             self.layers.append(LSENetLayer(self.manifold, embed_dim + 1, hidden_features, max_nums[i],
                                            bias=True, use_att=False, dropout=dropout,
                                            nonlin=self.nonlin, temperature=self.temperature))
-            # self.num_max = int(self.num_max / decay_rate)
 
     def forward(self, x, adj):
 
@@ -48,6 +47,7 @@ class LSENet(nn.Module):
 
         self.tree_node_coords = {self.height: z}
         self.assignments = {}
+        self.adjs = {self.height: adj}
 
         edge = adj.clone()
         ass = None
@@ -55,11 +55,13 @@ class LSENet(nn.Module):
             z, edge, ass = layer(z, edge)
             self.tree_node_coords[self.height - i - 1] = z
             self.assignments[self.height - i] = ass
+            self.adjs[self.height - i - 1] = edge
+
 
         self.tree_node_coords[0] = self.manifold.Frechet_mean(z)
         self.assignments[1] = torch.ones(ass.shape[-1], 1).to(x.device)
 
-        return self.tree_node_coords, self.assignments
+        return self.tree_node_coords, self.assignments, self.adjs
 
     def normalize(self, x):
         x = self.manifold.to_poincare(x)

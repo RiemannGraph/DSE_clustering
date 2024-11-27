@@ -61,13 +61,6 @@ def decoding_cluster_from_tree(manifold, tree: nx.Graph, num_clusters, num_nodes
                 pos += 1
 
     cluster_dist = {}
-    # for i in range(num_clusters):
-    #     u_list, _ = group_list[i]
-    #     group = []
-    #     for u in u_list:
-    #         index = tree.nodes[u]['children'].tolist()
-    #         group += index
-    #     cluster_dist.update({k: i for k in group})
     for i in range(len(group_list)):
         u_list, _ = group_list[i]
         group = []

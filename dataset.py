@@ -1,74 +1,48 @@
+from typing import Union
+
 import torch
 import networkx as nx
 import torch_geometric.datasets
 from torch_geometric.data import Dataset, Data
-from torch_geometric.datasets import Planetoid, Amazon, StochasticBlockModelDataset, WikipediaNetwork, Actor, WebKB
-from torch_geometric.utils import from_networkx, negative_sampling
-from torch_scatter import scatter_sum
-from utils.utils import index2adjacency, adjacency2index, normalize_adj
+from torch_geometric.data.data import BaseData
+from torch_geometric.datasets import (Amazon, KarateClub, Planetoid, WebKB)
+from torch_geometric.utils import from_networkx
 import urllib.request
 import io
 import zipfile
 import numpy as np
+from models.layers import IsoTransform
 
 
 def load_data(configs):
     dataset = None
-    if configs.dataset in ['Cora', 'Citeseer', 'Pubmed', 'Computers', 'Photo']:
-        dataset = PygDataset(root=configs.root_path, name=configs.dataset)
+    if configs.dataset in ["computers", "photo"]:
+        dataset = Amazon(configs.root_path, name=confgis.dataset)
+    elif configs.dataset in ['Cora', 'Citeseer', 'PubMed']:
+        dataset = Planetoid(configs.root_path, name=configs.dataset)
     elif configs.dataset == 'KarateClub':
         dataset = KarateClub()
     elif configs.dataset == 'FootBall':
         dataset = Football()
     elif configs.dataset in ['eat', 'bat', 'uat']:
         dataset = ATsDataset(root=configs.root_path, name=configs.dataset)
-    elif configs.dataset == 'SBM':
-        dataset = SBMDataset(root=configs.root_path)
-    elif configs.dataset in ['actor', 'chameleon', 'squirrel']:
-        dataset = Wikiped(root=configs.root_path, name=configs.dataset)
     elif configs.dataset in ['Cornell', 'Texas', 'Wisconsin']:
-        dataset = WebKBDataset(root=configs.root_path, name=configs.dataset)
-    data = {}
-    data['feature'] = dataset.feature
-    data['num_features'] = dataset.num_features
-    data['edge_index'] = dataset.edge_index
-    data['degrees'] = dataset.degrees
-    data['weight'] = dataset.weight
-    data['num_nodes'] = dataset.num_nodes
-    data['labels'] = dataset.labels
-    data['num_classes'] = dataset.num_classes
-    data['neg_edge_index'] = dataset.neg_edge_index
-    data['adj'] = dataset.adj
+        dataset = WebKB(root=configs.root_path, name=configs.dataset)
+    data = dataset[0].clone()
+    N = data.x.shape[0]
+    data.adj = torch.sparse_coo_tensor(indices=data.edge_index,
+                                       values=torch.ones(data.edge_index.shape[1]),
+                                       size=(N, N))
+    data.adj = IsoTransform(data.x.shape[1], 32, 0, 1)(data.x, data.adj)
     return data
 
 
-def mask_edges(edge_index, neg_edges, val_prop=0.05, test_prop=0.1):
-    n = len(edge_index[0])
-    n_val = int(val_prop * n)
-    n_test = int(test_prop * n)
-    edge_val, edge_test, edge_train = edge_index[:, :n_val], edge_index[:, n_val:n_val + n_test], edge_index[:, n_val + n_test:]
-    val_edges_neg, test_edges_neg = neg_edges[:, :n_val], neg_edges[:, n_val:n_test + n_val]
-    train_edges_neg = torch.concat([neg_edges, val_edges_neg, test_edges_neg], dim=-1)
-    return (edge_train, edge_val, edge_test), (train_edges_neg, val_edges_neg, test_edges_neg)
-
-
-class KarateClub:
+class Football(Dataset):
+    """
+    Refer to https://networkx.org/documentation/stable/auto_examples/graph/plot_football.html
+    """
     def __init__(self):
-        data = torch_geometric.datasets.KarateClub()
-        self.feature = data.x
-        self.num_features = data.x.shape[1]
-        self.num_nodes = data.x.shape[0]
-        self.edge_index = data.edge_index
-        self.weight = torch.ones(self.edge_index.shape[1])
-        self.degrees = scatter_sum(self.weight, self.edge_index[0])
-        self.labels = data.y.tolist()
-        self.num_classes = len(np.unique(self.labels))
-        self.neg_edge_index = negative_sampling(data.edge_index)
-        self.adj = index2adjacency(self.num_nodes, self.edge_index, self.weight, is_sparse=True)
-
-
-class Football:
-    def __init__(self):
+        super().__init__()
         url = "http://www-personal.umich.edu/~mejn/netdata/football.zip"
 
         sock = urllib.request.urlopen(url)  # open URL
@@ -83,115 +57,57 @@ class Football:
         graph = nx.parse_gml(gml)  # parse gml data
 
         data = from_networkx(graph)
-        self.feature = torch.eye(data.num_nodes)
-        self.num_features = data.num_nodes
-        self.num_nodes = data.num_nodes
-        self.edge_index = data.edge_index
-        self.weight = torch.ones(self.edge_index.shape[1])
-        self.degrees = scatter_sum(self.weight, self.edge_index[0])
-        self.labels = data.value.tolist()
-        self.num_classes = len(np.unique(self.labels))
-        self.neg_edge_index = negative_sampling(data.edge_index)
-        self.adj = index2adjacency(self.num_nodes, self.edge_index, self.weight, is_sparse=True)
+        data.x = torch.eye(data.num_nodes)
+        data.y = torch.tensor(data.value.tolist()).long()
+        self.data = data
+
+    def len(self) -> int:
+        return 1
+
+    def get(self, idx: int) -> BaseData:
+        return self.data
+
+    @property
+    def num_node_features(self) -> int:
+        return self.data.num_nodes
+
+    @property
+    def num_features(self) -> int:
+        return self.data.num_nodes
+
+    @property
+    def num_classes(self) -> int:
+        return len(np.unique(self.data.y))
 
 
-class PygDataset:
-    def __init__(self, root, name='Cora'):
-        if name in ['Cora', 'Citeseer', 'Pubmed']:
-            dataset = Planetoid(root, name)
-        else:
-            dataset = Amazon(root, name)
-        data = dataset.data
-        self.num_nodes = data.x.shape[0]
-        self.feature = data.x
-        self.num_features = data.x.shape[1]
-        self.edge_index = data.edge_index
-        self.weight = torch.ones(self.edge_index.shape[1])
-        self.degrees = scatter_sum(self.weight, self.edge_index[0])
-        self.labels = data.y.tolist()
-        self.num_classes = len(np.unique(self.labels))
-        self.neg_edge_index = negative_sampling(data.edge_index)
-        self.adj = index2adjacency(self.num_nodes, self.edge_index, self.weight, is_sparse=True)
-
-
-class ATsDataset:
+class ATsDataset(Dataset):
     def __init__(self, root, name='eat'):
+        super().__init__(root)
         adj = np.load(f'{root}/{name}/{name}_adj.npy')
         feat = np.load(f'{root}/{name}/{name}_feat.npy')
         label = np.load(f'{root}/{name}/{name}_label.npy')
+
         self.num_nodes = feat.shape[0]
-        self.feature = torch.tensor(feat).float()
-        self.num_features = feat.shape[1]
-        self.edge_index = adjacency2index(torch.tensor(adj))
-        self.weight = torch.ones(self.edge_index.shape[1])
-        self.degrees = scatter_sum(self.weight, self.edge_index[0])
-        self.labels = list(label)
-        self.num_classes = len(np.unique(self.labels))
-        self.neg_edge_index = negative_sampling(self.edge_index)
-        self.adj = index2adjacency(self.num_nodes, self.edge_index, self.weight, is_sparse=True)
+        x = torch.tensor(feat).float()
+        y = list(label)
+        edge_index = adjacency2index(torch.tensor(adj))
+        data = Data(x=x, edge_index=edge_index, y=y)
+        self.data = data
 
+    def len(self) -> int:
+        return 1
 
-class SBMDataset:
-    def __init__(self, root, num_classes=5, num_nodes=200, p_in=0.6, p_out=0.03):
-        num_classes = num_classes
-        p = torch.zeros(num_classes, num_classes)
-        for i in range(num_classes):
-            for j in range(num_classes):
-                if i == j:
-                    p[i, j] = p_in
-                else:
-                    p[i, j] = p_out
+    def get(self, idx: int) -> BaseData:
+        return self.data
 
-        data = StochasticBlockModelDataset(root,
-                                              [num_nodes / num_classes] * num_classes,
-                                              p, num_nodes=num_nodes)[0]
-        data.x = torch.eye(data.num_nodes)
-        self.num_nodes = data.x.shape[0]
-        self.feature = data.x
-        self.num_features = data.x.shape[1]
-        self.edge_index = data.edge_index
-        self.weight = torch.ones(self.edge_index.shape[1])
-        self.degrees = scatter_sum(self.weight, self.edge_index[0])
-        self.labels = data.y.tolist()
-        self.num_classes = len(np.unique(self.labels))
-        self.neg_edge_index = negative_sampling(data.edge_index)
-        self.adj = index2adjacency(self.num_nodes, self.edge_index, self.weight, is_sparse=True)
+    @property
+    def num_node_features(self) -> int:
+        return self.data.x.shape[1]
 
+    @property
+    def num_features(self) -> int:
+        return self.data.x.shape[1]
 
-class Wikiped:
-    def __init__(self, root, name='chameleon'):
-        assert name in ['actor', 'chameleon', 'squirrel']
-        if name == 'actor':
-            path = root + f'/{name}'
-            dataset = Actor(root=path)
-        else:
-            dataset = WikipediaNetwork(root=root, name=name)
-        data = dataset.data
-        self.num_nodes = data.x.shape[0]
-        self.feature = data.x
-        self.num_features = data.x.shape[1]
-        self.edge_index = data.edge_index
-        self.weight = torch.ones(self.edge_index.shape[1])
-        self.degrees = scatter_sum(self.weight, self.edge_index[0])
-        self.labels = data.y.tolist()
-        self.num_classes = len(np.unique(self.labels))
-        self.neg_edge_index = negative_sampling(data.edge_index)
-        self.adj = index2adjacency(self.num_nodes, self.edge_index, self.weight, is_sparse=True)
-
-
-class WebKBDataset:
-    def __init__(self, root, name='Cornell'):
-        assert name in ['Cornell', 'Texas', 'Wisconsin']
-        dataset = WebKB(root, name=name)
-        data = dataset.data
-        self.num_nodes = data.x.shape[0]
-        self.feature = data.x
-        self.num_features = data.x.shape[1]
-        self.edge_index = data.edge_index
-        self.weight = torch.ones(self.edge_index.shape[1])
-        self.degrees = scatter_sum(self.weight, self.edge_index[0])
-        self.labels = data.y.tolist()
-        self.num_classes = len(np.unique(self.labels))
-        self.neg_edge_index = negative_sampling(data.edge_index)
-        self.adj = index2adjacency(self.num_nodes, self.edge_index, self.weight, is_sparse=True)
-
+    @property
+    def num_classes(self) -> int:
+        return len(np.unique(self.data.y))

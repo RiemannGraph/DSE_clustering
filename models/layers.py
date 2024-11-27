@@ -7,7 +7,7 @@ from geoopt.tensor import ManifoldParameter
 from torch_scatter import scatter_sum, scatter_softmax
 from torch_geometric.utils import add_self_loops
 import math
-from utils.utils import gumbel_softmax, adjacency2index, index2adjacency, normalize_adj
+from utils.utils import gumbel_softmax, adjacency2index, index2adjacency, normalize_adj, graph_top_K
 
 
 class LorentzGraphConvolution(nn.Module):
@@ -20,9 +20,9 @@ class LorentzGraphConvolution(nn.Module):
         self.linear = LorentzLinear(manifold, in_features, out_features, use_bias, dropout, nonlin=nonlin)
         self.agg = LorentzAgg(manifold, out_features, dropout, use_att)
 
-    def forward(self, x, edge_index):
+    def forward(self, x, adj):
         h = self.linear(x)
-        h = self.agg(h, edge_index)
+        h = self.agg(h, adj)
         return h
 
 
@@ -160,8 +160,48 @@ class LSENetLayer(nn.Module):
         x_assigned = support_t / denorm
 
         adj = ass.t() @ adj @ ass
-        adj = adj - torch.eye(adj.shape[0]).to(adj.device) * adj.diag()
-        adj = normalize_adj(adj)
         idx = adj.nonzero().t()
         adj = torch.sparse_coo_tensor(idx, adj[idx[0], idx[1]], size=adj.shape)
         return x_assigned, adj, ass
+
+
+class IsoTransform(nn.Module):
+    def __init__(self, in_dim, out_dim, ax_i, ax_j, n_layers=2, k=20, omega=0.1, mode='sim'):
+        super(IsoTransform, self).__init__()
+        # self.lin = nn.Linear(in_dim, out_dim)
+        self.theta = nn.Parameter(torch.tensor([np.pi / 4]), requires_grad=False)
+        self.ax_i = ax_i
+        self.ax_j = ax_j
+        self.dim = in_dim
+        self.k = k
+        self.l = n_layers
+        self.omega = omega
+
+    def givens_rot_mat(self):
+        i, j = self.ax_i, self.ax_j
+        G = torch.eye(self.dim).to(self.theta.device)
+        c = torch.cos(self.theta)
+        s = torch.sin(self.theta)
+        G[i, i] = c
+        G[j, j] = c
+        G[i, j] = -s
+        G[j, i] = s
+        return G
+
+    def forward(self, x, raw_adj):
+        rot = self.givens_rot_mat()
+        # x = raw_adj @ self.lin(x)
+        xxt = x @ x.t()
+        x_ex = torch.linalg.inv(xxt + self.omega * torch.eye(x.shape[0]).to(x.device))
+        sim_adj = graph_top_K(xxt, k=self.k)
+        adj_l = torch.matrix_power(raw_adj.to_dense(), self.l)
+        sim_l = torch.matrix_power(sim_adj.to_dense(), self.l)
+        B = (adj_l + sim_l) @ x @ rot.t()
+        xb = x @ B.t() + B @ x.t()
+        M = 0.5 * (x_ex @ xb + xb @ x_ex)
+        v, P = torch.linalg.eig(M)
+        v = v.real
+        P = P.real
+        A = P @ torch.diag(v.real.clamp(min=1e-6) ** (1. / self.l)) @ P.t()
+        A = graph_top_K(A, k=self.k)
+        return A
