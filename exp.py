@@ -12,7 +12,6 @@ from dataset import load_data
 from utils.train_utils import EarlyStopping
 from logger import create_logger
 from manifold.poincare import Poincare
-from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR
 import time
 
 
@@ -120,9 +119,7 @@ class Exp:
         trues = data.y.cpu().numpy()
         _, color_dict = plot_leaves(tree_graph, manifold, embeddings, trues, height=self.configs.height,
                                     save_path=f"./results/{self.configs.dataset}/{self.configs.dataset}_hyp_h{self.configs.height}_{exp_iter}_true.pdf")
-        predicts = decoding_cluster_from_tree(manifold, tree_graph,
-                                              data.num_classes, data.x.shape[0],
-                                              height=self.configs.height)
+        predicts = model.ass_mat[1].argmax(1).cpu().numpy()
         metrics = cluster_metrics(trues, predicts)
         metrics.clusterAcc()
         new_pred = metrics.new_predicts
