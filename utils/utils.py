@@ -127,6 +127,27 @@ def index2adjacency(N, edge_index, weight=None, is_sparse=True):
     return adjacency
 
 
-def normalize_adj(adj):
-    degree_matrix = 1. / (torch.sqrt(adj.sum(-1)) + 1e-10)
-    return torch.diag(degree_matrix) @ adj @ torch.diag(degree_matrix)
+def normalize_adj(adj, sparse=False):
+    if sparse:
+        adj = adj.coalesce()
+        inv_sqrt_degree = 1. / (torch.sqrt(torch.sparse.sum(adj, dim=1).values()))
+        degree = inv_sqrt_degree[adj.indices()[0]] * inv_sqrt_degree[adj.indices()[1]]
+        weight = adj.values() * degree
+        return torch.sparse_coo_tensor(adj.indices(), weight, adj.size())
+    else:
+        degree_matrix = 1. / (torch.sqrt(adj.sum(-1)) + 1e-10)
+        return torch.diag(degree_matrix) @ adj @ torch.diag(degree_matrix)
+
+
+def givens_rot_mat(i, j, theta: torch.Tensor, n):
+    assert 0 <= i <= n - 1 and 0 <= j <= n - 1, "Invalid rotation axis"
+    if isinstance(theta, float):
+        theta = torch.tensor([theta])
+    G = torch.eye(n).to(theta.device)
+    c = torch.cos(theta)
+    s = torch.sin(theta)
+    G[i, i] = c
+    G[j, j] = c
+    G[i, j] = -s
+    G[j, i] = s
+    return G

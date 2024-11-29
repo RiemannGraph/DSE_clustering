@@ -37,7 +37,6 @@ class LSENet(nn.Module):
                                            nonlin=self.nonlin, temperature=self.temperature))
 
     def forward(self, x, adj):
-
         """mapping x into Lorentz model"""
         o = torch.zeros_like(x).to(x.device)
         x = torch.cat([o[:, 0:1], x], dim=1)
@@ -45,23 +44,23 @@ class LSENet(nn.Module):
         z = self.embed_layer(x, adj)
         z = self.normalize(z)
 
-        self.tree_node_coords = {self.height: z}
-        self.assignments = {}
-        self.adjs = {self.height: adj}
+        tree_node_coords = {self.height: z}
+        assignments = {}
+        adjs = {self.height: adj}
 
         edge = adj.clone()
         ass = None
         for i, layer in enumerate(self.layers):
             z, edge, ass = layer(z, edge)
-            self.tree_node_coords[self.height - i - 1] = z
-            self.assignments[self.height - i] = ass
-            self.adjs[self.height - i - 1] = edge
+            tree_node_coords[self.height - i - 1] = z
+            assignments[self.height - i] = ass
+            adjs[self.height - i - 1] = edge
 
 
-        self.tree_node_coords[0] = self.manifold.Frechet_mean(z)
-        self.assignments[1] = torch.ones(ass.shape[-1], 1).to(x.device)
+        tree_node_coords[0] = self.manifold.Frechet_mean(z)
+        assignments[1] = torch.ones(ass.shape[-1], 1).to(x.device)
 
-        return self.tree_node_coords, self.assignments, self.adjs
+        return tree_node_coords, assignments, adjs
 
     def normalize(self, x):
         x = self.manifold.to_poincare(x)

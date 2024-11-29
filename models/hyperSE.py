@@ -22,20 +22,18 @@ class HyperSE(nn.Module):
         self.height = height
         self.tau = temperature
         self.manifold = Lorentz()
-        self.iso_trans = IsoTransform(in_features, 32, 0, 1)
         self.encoder = LSENet(self.manifold, in_features, hidden_dim_enc, hidden_features,
                               num_nodes, height, temperature, embed_dim, dropout,
                               nonlin, decay_rate, max_nums)
 
-    def forward(self, data, device=torch.device('cuda:0')):
+    def forward(self, data):
         features = data.x
-        adj = data.adj.to(device)
-        # adj = self.iso_trans(features, adj)
+        adj = data.adj.clone()
         embeddings, clu_mat, adjs = self.encoder(features, adj)
         self.embeddings = {}
         for height, x in embeddings.items():
             self.embeddings[height] = x.detach()
-        ass_mat = {self.height: torch.eye(self.num_nodes).to(device)}
+        ass_mat = {self.height: torch.eye(self.num_nodes).to(data.x.device)}
         for k in range(self.height - 1, 0, -1):
             ass_mat[k] = ass_mat[k + 1] @ clu_mat[k + 1]
         for k, v in ass_mat.items():
@@ -46,22 +44,13 @@ class HyperSE(nn.Module):
         self.ass_mat = ass_mat
         return self.embeddings[self.height]
 
-    def loss(self, data, device=torch.device('cuda:0')):
-        """_summary_
-
-        Args:
-            data: dict
-            device: torch.Device
-        """
-        adj = data.adj.coalesce().to(device)
+    def loss(self, data):
+        adj = data.adj.clone()
         features = data.x.clone()
-        # adj = self.iso_trans(features, adj)
         embeddings, clu_mat, adjs = self.encoder(features, adj)
 
-        weight, edge_index = adj.values(), adj.indices()
-
         se_loss = 0
-        vol_G = weight.sum()
+        vol_G = adj.sum()
 
         for k in range(self.height, 0, -1):
             adj_dense = adjs[k].to_dense()

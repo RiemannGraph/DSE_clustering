@@ -12,6 +12,7 @@ import io
 import zipfile
 import numpy as np
 from models.layers import IsoTransform
+from utils.utils import normalize_adj
 
 
 def load_data(configs):
@@ -33,6 +34,7 @@ def load_data(configs):
     data.adj = torch.sparse_coo_tensor(indices=data.edge_index,
                                        values=torch.ones(data.edge_index.shape[1]),
                                        size=(N, N))
+    data.adj = normalize_adj(data.adj, sparse=True)
     data.adj = IsoTransform(data.x.shape[1], 32, 0, 1)(data.x, data.adj)
     data.num_classes = data.y.max().item()
     return data

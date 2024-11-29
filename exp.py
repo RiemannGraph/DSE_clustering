@@ -23,16 +23,10 @@ class Exp:
         else:
             self.device = torch.device('cpu')
 
-    def send_device(self, data):
-        for k, v in data.items():
-            if isinstance(v, torch.Tensor):
-                data[k] = v.to(self.device)
-
     def train(self):
         logger = create_logger(self.configs.log_path)
         device = self.device
-        data = load_data(self.configs)
-        self.send_device(data)
+        data = load_data(self.configs).to(device)
 
         total_nmi = []
         total_ari = []
@@ -66,7 +60,7 @@ class Exp:
         n_cluster_trials = self.configs.n_cluster_trials
         for epoch in range(1, self.configs.epochs + 1):
             model.train()
-            loss = model.loss(data, device)
+            loss = model.loss(data)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -75,6 +69,7 @@ class Exp:
             if epoch % self.configs.eval_freq == 0:
                 logger.info("-----------------------Evaluation Start---------------------")
                 model.eval()
+                _ = model(data)
                 predicts = model.ass_mat[1].argmax(1).cpu().numpy()
                 trues = data.y.cpu().numpy()
                 acc, nmi, f1, ari = [], [], [], []
@@ -109,7 +104,7 @@ class Exp:
         logger.info('------------------Loading best model-------------------')
         model.load_state_dict(torch.load(f"./checkpoints/{self.configs.save_path}"))
         model.eval()
-        embeddings = model(data, device).detach().cpu()
+        embeddings = model(data).detach().cpu()
         manifold = model.manifold.cpu()
         tree = construct_tree(torch.tensor([i for i in range(data.x.shape[0])]).long(),
                               manifold,
