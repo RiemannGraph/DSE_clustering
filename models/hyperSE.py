@@ -51,7 +51,6 @@ class HyperSE(nn.Module):
 
         Args:
             data: dict
-            edge_index: torch.LongTensor
             device: torch.Device
         """
         adj = data.adj.coalesce().to(device)

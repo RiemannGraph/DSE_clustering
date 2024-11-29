@@ -34,6 +34,7 @@ def load_data(configs):
                                        values=torch.ones(data.edge_index.shape[1]),
                                        size=(N, N))
     data.adj = IsoTransform(data.x.shape[1], 32, 0, 1)(data.x, data.adj)
+    data.num_classes = data.y.max().item()
     return data
 
 

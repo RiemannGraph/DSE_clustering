@@ -37,16 +37,16 @@ class Exp:
 
         total_nmi = []
         total_ari = []
-        aucs = []
-        aps = []
         for exp_iter in range(self.configs.exp_iters):
             logger.info(f"\ntrain iters {exp_iter}")
             model = HyperSE(in_features=data.x.shape[1],
                             hidden_features=self.configs.hidden_dim,
                             hidden_dim_enc=self.configs.hidden_dim_enc,
                             num_nodes=data.x.shape[0],
-                            height=self.configs.height, temperature=self.configs.temperature,
-                            embed_dim=self.configs.embed_dim, dropout=self.configs.dropout,
+                            height=self.configs.height,
+                            temperature=self.configs.temperature,
+                            embed_dim=self.configs.embed_dim,
+                            dropout=self.configs.dropout,
                             nonlin=self.configs.nonlin,
                             decay_rate=self.configs.decay_rate,
                             max_nums=self.configs.max_nums).to(device)
@@ -76,20 +76,6 @@ class Exp:
             if epoch % self.configs.eval_freq == 0:
                 logger.info("-----------------------Evaluation Start---------------------")
                 model.eval()
-                decode_time = time.time()
-                embeddings = model(data, device).detach().cpu()
-                manifold = model.manifold.cpu()
-                # decode_time = time.time()
-                # tree = construct_tree(torch.tensor([i for i in range(data.x.shape[0])]).long(),
-                #                       manifold,
-                #                       model.embeddings, model.ass_mat, height=self.configs.height,
-                #                       num_nodes=embeddings.shape[0])
-                # decode_time = time.time() - decode_time
-                # logger.info(f"Decoding cost time: {decode_time: .3f} s")
-                # tree_graph = to_networkx_tree(tree, manifold, height=self.configs.height)
-                # predicts = decoding_cluster_from_tree(manifold, tree_graph,
-                #                                       data['num_classes'], data.x.shape[0],
-                #                                       height=self.configs.height)
                 predicts = model.ass_mat[1].argmax(1).cpu().numpy()
                 trues = data.y.cpu().numpy()
                 acc, nmi, f1, ari = [], [], [], []
@@ -126,19 +112,17 @@ class Exp:
         model.eval()
         embeddings = model(data, device).detach().cpu()
         manifold = model.manifold.cpu()
-        tree = construct_tree(torch.tensor([i for i in range(data['num_nodes'])]).long(),
+        tree = construct_tree(torch.tensor([i for i in range(data.x.shape[0])]).long(),
                               manifold,
                               model.embeddings, model.ass_mat, height=self.configs.height,
                               num_nodes=embeddings.shape[0])
         tree_graph = to_networkx_tree(tree, manifold, height=self.configs.height)
-        _, color_dict = plot_leaves(tree_graph, manifold, embeddings, data['labels'], height=self.configs.height,
+        trues = data.y.cpu().numpy()
+        _, color_dict = plot_leaves(tree_graph, manifold, embeddings, trues, height=self.configs.height,
                                     save_path=f"./results/{self.configs.dataset}/{self.configs.dataset}_hyp_h{self.configs.height}_{exp_iter}_true.pdf")
-        # plot_nx_graph(tree_graph, root=data['num_nodes'],
-        #               save_path=f"./results/{self.configs.dataset}/{self.configs.dataset}_hyp_h{self.configs.height}_{exp_iter}_nx.pdf")
         predicts = decoding_cluster_from_tree(manifold, tree_graph,
-                                              data['num_classes'], data['num_nodes'],
+                                              data.num_classes, data.x.shape[0],
                                               height=self.configs.height)
-        trues = data['labels']
         metrics = cluster_metrics(trues, predicts)
         metrics.clusterAcc()
         new_pred = metrics.new_predicts
