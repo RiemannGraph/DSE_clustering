@@ -194,3 +194,39 @@ class IsoTransform(nn.Module):
         A = normalize_adj(A, sparse=True)
         # A = 0.8 * raw_adj + 0.2 * sim_adj
         return A
+
+
+class LorentzTransformation(nn.Module):
+    """
+    Input size: [N, in_dim]
+    v : [1, in_dim]
+    W : [out_dim, in_dim]
+    Output size: [N, out_dim + 1]
+    """
+    def __init__(self, in_dim, out_dim):
+        super(LorentzTransformation, self).__init__()
+        self.v = nn.Parameter(torch.randn(1, in_dim), requires_grad=True)
+        if out_dim > in_dim:
+            self.theta = nn.Parameter(torch.randn(out_dim-in_dim, in_dim), requires_grad=True)
+        else:
+            self.theta = None
+        diag = torch.ones(in_dim)
+        diag.narrow(-1, 0, 1).mul_(-1)
+        self.metric = nn.Parameter(torch.diag(diag), requires_grad=False)
+        self.in_dim = in_dim
+        self.out_dim = out_dim
+
+    def forward(self, x):
+        vvT = self.v.t() @ self.v + self.metric
+        eig, U = torch.linalg.eigh(vvT.detach())
+        if self.theta is not None:
+            U = torch.concat([U, self.theta], dim=0)
+            L = torch.diag(eig.clamp(min=0.).sqrt())
+        else:
+            U = U.narrow(1, self.in_dim - self.out_dim, self.out_dim)
+            L = torch.diag(eig.narrow(0, self.in_dim - self.out_dim, self.out_dim).clamp(min=0.).sqrt())
+        W = U @ L
+        x = torch.concat([x @ self.v.t(), x @ W], dim=-1)
+        return x
+
+

@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 from utils.utils import gumbel_softmax, graph_top_K
 from torch_scatter import scatter_sum
-from models.layers import IsoTransform, LorentzLinear
+from models.layers import IsoTransform, LorentzTransformation
 from manifold.lorentz import Lorentz
 from models.encoders import GraphEncoder
 import math
@@ -25,7 +25,7 @@ class HyperSE(nn.Module):
         self.encoder = LSENet(self.manifold, in_features, hidden_dim_enc, hidden_features,
                               num_nodes, height, temperature, embed_dim, dropout,
                               nonlin, decay_rate, max_nums)
-        self.proj = LorentzLinear(self.manifold, embed_dim + 1, embed_dim + 1, bias=False)
+        self.proj = LorentzTransformation(embed_dim + 1, embed_dim)
 
     def forward(self, data):
         features = data.x
