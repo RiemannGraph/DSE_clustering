@@ -70,7 +70,7 @@ class Exp:
                 logger.info("-----------------------Evaluation Start---------------------")
                 model.eval()
                 _ = model(data)
-                predicts = model.ass_mat[1].argmax(1).cpu().numpy()
+                predicts = model.clu_mat[1].argmax(1).cpu().numpy()
                 trues = data.y.cpu().numpy()
                 acc, nmi, f1, ari = [], [], [], []
                 for step in range(n_cluster_trials):
@@ -108,13 +108,13 @@ class Exp:
         manifold = model.manifold.cpu()
         tree = construct_tree(torch.tensor([i for i in range(data.x.shape[0])]).long(),
                               manifold,
-                              model.embeddings, model.ass_mat, height=self.configs.height,
+                              model.embeddings, model.clu_mat, height=self.configs.height,
                               num_nodes=embeddings.shape[0])
         tree_graph = to_networkx_tree(tree, manifold, height=self.configs.height)
         trues = data.y.cpu().numpy()
         _, color_dict = plot_leaves(tree_graph, manifold, embeddings, trues, height=self.configs.height,
                                     save_path=f"./results/{self.configs.dataset}/{self.configs.dataset}_hyp_h{self.configs.height}_{exp_iter}_true.pdf")
-        predicts = model.ass_mat[1].argmax(1).cpu().numpy()
+        predicts = model.clu_mat[1].argmax(1).cpu().numpy()
         metrics = cluster_metrics(trues, predicts)
         metrics.clusterAcc()
         new_pred = metrics.new_predicts

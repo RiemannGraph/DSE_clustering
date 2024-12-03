@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 from utils.utils import gumbel_softmax, graph_top_K
 from torch_scatter import scatter_sum
-from models.layers import IsoTransform
+from models.layers import IsoTransform, LorentzLinear
 from manifold.lorentz import Lorentz
 from models.encoders import GraphEncoder
 import math
@@ -25,45 +25,66 @@ class HyperSE(nn.Module):
         self.encoder = LSENet(self.manifold, in_features, hidden_dim_enc, hidden_features,
                               num_nodes, height, temperature, embed_dim, dropout,
                               nonlin, decay_rate, max_nums)
+        self.proj = LorentzLinear(self.manifold, embed_dim + 1, embed_dim + 1, bias=False)
 
     def forward(self, data):
         features = data.x
         adj = data.adj.clone()
-        embeddings, clu_mat, adjs = self.encoder(features, adj)
+        embeddings, ass_mat, _ = self.encoder(features, adj)
         self.embeddings = {}
         for height, x in embeddings.items():
             self.embeddings[height] = x.detach()
-        ass_mat = {self.height: torch.eye(self.num_nodes).to(data.x.device)}
+        clu_mat = {self.height: torch.eye(self.num_nodes).to(data.x.device)}
         for k in range(self.height - 1, 0, -1):
-            ass_mat[k] = ass_mat[k + 1] @ clu_mat[k + 1]
-        for k, v in ass_mat.items():
+            clu_mat[k] = clu_mat[k + 1] @ ass_mat[k + 1]
+        for k, v in clu_mat.items():
             idx = v.max(1)[1]
             t = torch.zeros_like(v)
             t[torch.arange(t.shape[0]), idx] = 1.
-            ass_mat[k] = t
-        self.ass_mat = ass_mat
+            clu_mat[k] = t
+        self.clu_mat = clu_mat
         return self.embeddings[self.height]
 
-    def loss(self, data):
+    def loss(self, data, gamma=0.1):
         adj = data.adj.clone()
-        features = data.x.clone()
-        embeddings, clu_mat, adjs = self.encoder(features, adj)
+        aug_adj = data.aug_adj.clone()
+        x = data.x.clone()
+        z, ass_mats, adj_set = self.encoder(x, adj)
+        z_aug, ass_mats_aug, adj_aug_set = self.encoder(x, aug_adj)
 
+        se_loss = self.se_loss(self.height, adj_set, ass_mats) + self.manifold.dist0(z[0])
+        se_loss_aug = self.se_loss(self.height, adj_aug_set, ass_mats_aug) + self.manifold.dist0(z_aug[0])
+
+        z = self.proj(z[self.height])
+        z_aug = self.proj(z_aug[self.height])
+
+        tree_cl_loss = self.tree_cl_loss(self.manifold, z, z_aug)
+
+        return se_loss + se_loss_aug + gamma * tree_cl_loss
+
+    @staticmethod
+    def tree_cl_loss(manifold, z1, z2, tau=2.):
+        sim = 2. + 2 * manifold.cinner(z1, z2)
+        sim = -torch.log_softmax(sim / tau, dim=-1).diag()
+        loss = torch.mean(sim)
+        return loss
+
+    @staticmethod
+    def se_loss(height, adj_set: dict, ass_mats: dict, eps: float = 1e-6):
         se_loss = 0
-        vol_G = adj.sum()
+        vol_G = adj_set[height].sum()
 
-        for k in range(self.height, 0, -1):
-            adj_dense = adjs[k].to_dense()
+        for k in range(height, 0, -1):
+            adj_dense = adj_set[k].to_dense()
             degree = adj_dense.sum(dim=1)
             diag = adj_dense.diag()
             if k == 1:
                 vol_parent = vol_G
             else:
-                vol_parent = adjs[k - 1].to_dense().sum(dim=-1)
-                vol_parent = torch.einsum('ij, j->i', clu_mat[k], vol_parent)
+                vol_parent = adj_set[k - 1].to_dense().sum(dim=-1)
+                vol_parent = torch.einsum('ij, j->i', ass_mats[k], vol_parent)
             delta_vol = degree - diag
-            log_vol_ratio_k = torch.log2((degree + EPS) / (vol_parent + EPS))
+            log_vol_ratio_k = torch.log2((degree + eps) / (vol_parent + eps))
             se_loss += torch.sum(delta_vol * log_vol_ratio_k)
         se_loss = -1 / vol_G * se_loss
-
-        return se_loss + self.manifold.dist0(embeddings[0])
+        return se_loss

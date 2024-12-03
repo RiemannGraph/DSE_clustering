@@ -46,7 +46,7 @@ class LSENet(nn.Module):
 
         tree_node_coords = {self.height: z}
         assignments = {}
-        adjs = {self.height: adj}
+        adj_set = {self.height: adj}
 
         edge = adj.clone()
         ass = None
@@ -54,13 +54,13 @@ class LSENet(nn.Module):
             z, edge, ass = layer(z, edge)
             tree_node_coords[self.height - i - 1] = z
             assignments[self.height - i] = ass
-            adjs[self.height - i - 1] = edge
+            adj_set[self.height - i - 1] = edge
 
 
         tree_node_coords[0] = self.manifold.Frechet_mean(z)
         assignments[1] = torch.ones(ass.shape[-1], 1).to(x.device)
 
-        return tree_node_coords, assignments, adjs
+        return tree_node_coords, assignments, adj_set
 
     def normalize(self, x):
         x = self.manifold.to_poincare(x)

@@ -133,7 +133,6 @@ class LorentzAssignment(nn.Module):
         src, dst = edge_index[0], edge_index[1]
         qk = torch.cat([q[src], k[dst]], dim=-1)
         score = self.scalar_map(qk).squeeze(-1)
-        # score = 2 + 2 * self.manifold.inner(q[src], k[dst])
         score = scatter_softmax(score, src, dim=-1)
         att = torch.sparse_coo_tensor(edge_index, score, size=(x.shape[0], x.shape[0])).to(x.device)
         ass = torch.matmul(att, ass)   # (N_k, N_{k-1})
@@ -165,9 +164,8 @@ class LSENetLayer(nn.Module):
 
 
 class IsoTransform(nn.Module):
-    def __init__(self, in_dim, out_dim, ax_i, ax_j, n_layers=2, k=20, omega=1e-3, mode='sim'):
+    def __init__(self, in_dim, out_dim, ax_i, ax_j, n_layers=2, k=20, omega=1e-3):
         super(IsoTransform, self).__init__()
-        # self.lin = nn.Linear(in_dim, out_dim)
         self.theta = nn.Parameter(torch.tensor([0.]), requires_grad=False)
         self.ax_i = ax_i
         self.ax_j = ax_j
@@ -176,7 +174,6 @@ class IsoTransform(nn.Module):
         self.omega = omega
 
     def forward(self, x, raw_adj):
-        # x = raw_adj @ self.lin(x)
         rot = givens_rot_mat(self.ax_i, self.ax_j, self.theta, x.shape[1])
         xxt = x @ x.t()
         x_ex = torch.linalg.inv(xxt + self.omega * torch.eye(x.shape[0]).to(x.device))
