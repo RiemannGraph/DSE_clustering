@@ -228,5 +228,3 @@ class LorentzTransformation(nn.Module):
         W = U @ L
         x = torch.concat([x @ self.v.t(), x @ W], dim=-1)
         return x
-
-
