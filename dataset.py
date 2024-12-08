@@ -35,7 +35,7 @@ def load_data(configs):
                                        values=torch.ones(data.edge_index.shape[1]),
                                        size=(N, N))
     data.adj = normalize_adj(data.adj, sparse=True)
-    data.aug_adj = 0.2 * IsoTransform(data.x.shape[1], 32, 0, 1)(data.x, data.adj) + 0.8 * data.adj
+    data.aug_adj = 0.4 * IsoTransform(0, 1)(data.x, data.adj) + 0.6 * data.adj
     data.num_classes = data.y.max().item()
     return data
 

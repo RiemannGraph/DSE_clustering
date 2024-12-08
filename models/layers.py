@@ -111,10 +111,8 @@ class LorentzAssignment(nn.Module):
         super(LorentzAssignment, self).__init__()
         self.manifold = manifold
         self.num_assign = num_assign
-        self.proj = LorentzGraphConvolution(manifold, in_features, hidden_features,
-                                            use_bias=bias, dropout=dropout, nonlin=None, use_att=False)
         self.assign_linear = nn.Sequential(
-            nn.Linear(hidden_features, num_assign, bias=False),
+            nn.Linear(in_features, num_assign, bias=False),
                                            )
         self.temperature = temperature
         self.key_linear = LorentzLinear(manifold, in_features, hidden_features, bias=False)
@@ -126,7 +124,7 @@ class LorentzAssignment(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x, adj):
-        ass = self.assign_linear(self.manifold.logmap0(self.proj(x, adj))).softmax(-1)
+        ass = self.assign_linear(self.manifold.logmap0(x)).softmax(-1)
         q = self.query_linear(x)
         k = self.key_linear(x)
         edge_index = adj.coalesce().indices()
@@ -164,13 +162,13 @@ class LSENetLayer(nn.Module):
 
 
 class IsoTransform(nn.Module):
-    def __init__(self, in_dim, out_dim, ax_i, ax_j, n_layers=2, k=20, omega=1e-3):
+    def __init__(self, ax_i, ax_j, n_layers=2, k=20, omega=1e-3):
         super(IsoTransform, self).__init__()
         self.theta = nn.Parameter(torch.tensor([0.]), requires_grad=False)
         self.ax_i = ax_i
         self.ax_j = ax_j
         self.k = k
-        self.l = n_layers
+        self.n_layers = n_layers
         self.omega = omega
 
     def forward(self, x, raw_adj):
@@ -179,20 +177,19 @@ class IsoTransform(nn.Module):
         x_ex = torch.linalg.inv(xxt + self.omega * torch.eye(x.shape[0]).to(x.device))
         sim_adj = graph_top_K(xxt, k=self.k)
         sim_adj = normalize_adj(sim_adj, sparse=True)
-        adj_l = torch.matrix_power(raw_adj.to_dense(), self.l)
-        sim_l = torch.matrix_power(sim_adj.to_dense(), self.l)
+        adj_l = torch.matrix_power(raw_adj.to_dense(), self.n_layers)
+        sim_l = torch.matrix_power(sim_adj.to_dense(), self.n_layers)
         B = (adj_l + sim_l) @ x @ rot.t()
         xb = x @ B.t() + B @ x.t()
         M = 0.5 * (x_ex @ xb + xb @ x_ex)
         v, P = torch.linalg.eig(M)
         v = v.real
         P = P.real
-        A = P @ torch.diag(v.real.clamp(min=1e-6) ** (1. / self.l)) @ P.t()
+        A = P @ torch.diag(v.real.clamp(min=1e-6) ** (1. / self.n_layers)) @ P.t()
         A = A - torch.eye(A.shape[0]).to(A.device) * A.diag()
         A = A.clamp(min=0.)
         A = graph_top_K(A, k=self.k)
         A = normalize_adj(A, sparse=True)
-        # A = 0.8 * raw_adj + 0.2 * sim_adj
         return A
 
 
