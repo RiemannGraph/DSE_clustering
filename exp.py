@@ -101,26 +101,26 @@ class Exp:
                     f"Epoch {epoch}: ACC: {acc}, NMI: {nmi}, F1: {f1}, ARI: {ari}")
                 logger.info(
                     "-------------------------------------------------------------------------")
-        logger.info('------------------Loading best model-------------------')
-        model.load_state_dict(torch.load(f"./checkpoints/{self.configs.save_path}"))
-        model.eval()
-        embeddings = model(data).detach().cpu()
-        manifold = model.manifold.cpu()
-        tree = construct_tree(torch.tensor([i for i in range(data.x.shape[0])]).long(),
-                              manifold,
-                              model.embeddings, model.clu_mat, height=self.configs.height,
-                              num_nodes=embeddings.shape[0])
-        tree_graph = to_networkx_tree(tree, manifold, height=self.configs.height)
-        trues = data.y.cpu().numpy()
-        _, color_dict = plot_leaves(tree_graph, manifold, embeddings, trues, height=self.configs.height,
-                                    save_path=f"./results/{self.configs.dataset}/{self.configs.dataset}_hyp_h{self.configs.height}_{exp_iter}_true.pdf")
-        predicts = model.clu_mat[1].argmax(1).cpu().numpy()
-        metrics = cluster_metrics(trues, predicts)
-        metrics.clusterAcc()
-        new_pred = metrics.new_predicts
-        plot_leaves(tree_graph, manifold, embeddings, new_pred, height=self.configs.height,
-                                    save_path=f"./results/{self.configs.dataset}/{self.configs.dataset}_hyp_h{self.configs.height}_{exp_iter}_pred.pdf",
-                    colors_dict=color_dict)
+        # logger.info('------------------Loading best model-------------------')
+        # model.load_state_dict(torch.load(f"./checkpoints/{self.configs.save_path}"))
+        # model.eval()
+        # embeddings = model(data).detach().cpu()
+        # manifold = model.manifold.cpu()
+        # tree = construct_tree(torch.tensor([i for i in range(data.x.shape[0])]).long(),
+        #                       manifold,
+        #                       model.embeddings, model.clu_mat, height=self.configs.height,
+        #                       num_nodes=embeddings.shape[0])
+        # tree_graph = to_networkx_tree(tree, manifold, height=self.configs.height)
+        # trues = data.y.cpu().numpy()
+        # _, color_dict = plot_leaves(tree_graph, manifold, embeddings, trues, height=self.configs.height,
+        #                             save_path=f"./results/{self.configs.dataset}/{self.configs.dataset}_hyp_h{self.configs.height}_{exp_iter}_true.pdf")
+        # predicts = model.clu_mat[1].argmax(1).cpu().numpy()
+        # metrics = cluster_metrics(trues, predicts)
+        # metrics.clusterAcc()
+        # new_pred = metrics.new_predicts
+        # plot_leaves(tree_graph, manifold, embeddings, new_pred, height=self.configs.height,
+        #                             save_path=f"./results/{self.configs.dataset}/{self.configs.dataset}_hyp_h{self.configs.height}_{exp_iter}_pred.pdf",
+        #             colors_dict=color_dict)
         for k, result in best_cluster_result.items():
             acc, nmi, f1, ari = result
             logger.info(
