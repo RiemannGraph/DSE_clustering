@@ -130,9 +130,13 @@ def index2adjacency(N, edge_index, weight=None, is_sparse=True):
 def normalize_adj(adj, sparse=False):
     if sparse:
         adj = adj.coalesce()
-        inv_sqrt_degree = 1. / (torch.sqrt(torch.sparse.sum(adj, dim=1).values()))
-        degree = inv_sqrt_degree[adj.indices()[0]] * inv_sqrt_degree[adj.indices()[1]]
-        weight = adj.values() * degree
+        degree = adj.sum(1)
+        d_idx = degree.indices().reshape(-1)
+        inv_sqrt_degree = torch.zeros(degree.shape)
+        inv_sqrt_degree[d_idx] = 1. / (torch.sqrt(degree.values()))
+        a_idx = adj.indices()
+        div = inv_sqrt_degree[a_idx[0]] * inv_sqrt_degree[a_idx[1]]
+        weight = adj.values() * div
         return torch.sparse_coo_tensor(adj.indices(), weight, adj.size())
     else:
         degree_matrix = 1. / (torch.sqrt(adj.sum(-1)) + 1e-10)
