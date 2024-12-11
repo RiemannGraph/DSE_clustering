@@ -16,7 +16,7 @@ EPS = 1e-6
 
 class HyperSE(nn.Module):
     def __init__(self, in_features, hidden_dim_enc, hidden_features, num_nodes, height=3, temperature=0.2,
-                 embed_dim=2, dropout=0.5, nonlin='relu', decay_rate=None, max_nums=None):
+                 embed_dim=32, cl_dim=32, dropout=0.5, nonlin='relu', decay_rate=None, max_nums=None):
         super(HyperSE, self).__init__()
         self.num_nodes = num_nodes
         self.height = height
@@ -25,7 +25,7 @@ class HyperSE(nn.Module):
         self.encoder = LSENet(self.manifold, in_features, hidden_dim_enc, hidden_features,
                               num_nodes, height, temperature, embed_dim, dropout,
                               nonlin, decay_rate, max_nums)
-        self.proj = LorentzTransformation(embed_dim + 1, embed_dim)
+        self.proj = LorentzTransformation(embed_dim + 1, cl_dim)
 
     def forward(self, data):
         features = data.x
@@ -45,7 +45,7 @@ class HyperSE(nn.Module):
         self.clu_mat = clu_mat
         return self.embeddings[self.height]
 
-    def loss(self, data, gamma=0.1):
+    def loss(self, data, scale=0.1, gamma=0.6):
         adj = data.adj.clone()
         aug_adj = data.aug_adj.clone()
         x = data.x.clone()
@@ -60,7 +60,7 @@ class HyperSE(nn.Module):
 
         tree_cl_loss = self.tree_cl_loss(self.manifold, z, z_aug)
 
-        return se_loss + se_loss_aug + gamma * tree_cl_loss
+        return (1 - gamma) * (se_loss + se_loss_aug) + scale * tree_cl_loss * gamma
 
     @staticmethod
     def tree_cl_loss(manifold, z1, z2, tau=2.):

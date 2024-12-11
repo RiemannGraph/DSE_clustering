@@ -162,20 +162,22 @@ class LSENetLayer(nn.Module):
 
 
 class IsoTransform(nn.Module):
-    def __init__(self, ax_i, ax_j, n_layers=2, k=20, omega=1e-3):
+    def __init__(self, ax_i, ax_j, n_layers=2, k_sim=10, k_aug=10, omega=1e-2, alpha=0.1):
         super(IsoTransform, self).__init__()
         self.theta = nn.Parameter(torch.tensor([0.]), requires_grad=False)
         self.ax_i = ax_i
         self.ax_j = ax_j
-        self.k = k
+        self.k_sim = k_sim
+        self.k_aug = k_aug
         self.n_layers = n_layers
         self.omega = omega
+        self.alpha = alpha
 
     def forward(self, x, raw_adj):
         rot = givens_rot_mat(self.ax_i, self.ax_j, self.theta, x.shape[1])
         xxt = x @ x.t()
         x_ex = torch.linalg.inv(xxt + self.omega * torch.eye(x.shape[0]).to(x.device))
-        sim_adj = graph_top_K(xxt, k=self.k)
+        sim_adj = graph_top_K(xxt, k=self.k_sim)
         sim_adj = normalize_adj(sim_adj, sparse=True)
         adj_l = torch.matrix_power(raw_adj.to_dense(), self.n_layers)
         sim_l = torch.matrix_power(sim_adj.to_dense(), self.n_layers)
@@ -188,8 +190,9 @@ class IsoTransform(nn.Module):
         A = P @ torch.diag(v.real.clamp(min=1e-6) ** (1. / self.n_layers)) @ P.t()
         A = A - torch.eye(A.shape[0]).to(A.device) * A.diag()
         A = A.clamp(min=0.)
-        A = graph_top_K(A, k=self.k)
+        A = graph_top_K(A, k=self.k_aug)
         A = normalize_adj(A, sparse=True)
+        A = self.alpha * A + (1 - self.alpha) * raw_adj
         return A
 
 
@@ -204,7 +207,7 @@ class LorentzTransformation(nn.Module):
         super(LorentzTransformation, self).__init__()
         self.v = nn.Parameter(torch.randn(1, in_dim), requires_grad=True)
         if (out_dim - 1) > in_dim:
-            self.theta = nn.Parameter(torch.randn(out_dim - 1 - in_dim, in_dim), requires_grad=True)
+            self.theta = nn.Parameter(torch.zeros(out_dim - 1 - in_dim, in_dim), requires_grad=False)
         else:
             self.theta = None
         diag = torch.ones(in_dim)
@@ -217,9 +220,8 @@ class LorentzTransformation(nn.Module):
         vvT = self.v.t() @ self.v + self.metric
         eig, U = torch.linalg.eigh(vvT.detach())
         if self.theta is not None:
-            U = torch.concat([U, self.theta], dim=0)
             L = torch.diag(eig.clamp(min=0.).sqrt())
-            W = U @ L
+            W = torch.cat([L @ U.t(), self.theta], dim=0)
         else:
             U = U.narrow(1, self.in_dim - self.out_dim, self.out_dim)
             L = torch.diag(eig.narrow(0, self.in_dim - self.out_dim, self.out_dim).clamp(min=0.).sqrt())

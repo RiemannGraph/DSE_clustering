@@ -18,7 +18,7 @@ from utils.utils import normalize_adj
 def load_data(configs):
     dataset = None
     if configs.dataset in ["computers", "photo"]:
-        dataset = Amazon(configs.root_path, name=confgis.dataset)
+        dataset = Amazon(configs.root_path, name=configs.dataset)
     elif configs.dataset in ['Cora', 'Citeseer', 'PubMed']:
         dataset = Planetoid(configs.root_path, name=configs.dataset)
     elif configs.dataset == 'KarateClub':
@@ -35,7 +35,7 @@ def load_data(configs):
                                        values=torch.ones(data.edge_index.shape[1]),
                                        size=(N, N))
     data.adj = normalize_adj(data.adj, sparse=True)
-    data.aug_adj = 0.4 * IsoTransform(0, 1)(data.x, data.adj) + 0.6 * data.adj
+    data.aug_adj = IsoTransform(0, 1, configs.L, configs.top_k_sim, configs.top_k_aug, configs.omega, configs.alpha)(data.x, data.adj)
     data.num_classes = data.y.max().item()
     return data
 

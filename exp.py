@@ -39,6 +39,7 @@ class Exp:
                             height=self.configs.height,
                             temperature=self.configs.temperature,
                             embed_dim=self.configs.embed_dim,
+                            cl_dim=self.configs.cl_dim,
                             dropout=self.configs.dropout,
                             nonlin=self.configs.nonlin,
                             decay_rate=self.configs.decay_rate,
@@ -60,7 +61,7 @@ class Exp:
         n_cluster_trials = self.configs.n_cluster_trials
         for epoch in range(1, self.configs.epochs + 1):
             model.train()
-            loss = model.loss(data)
+            loss = model.loss(data, self.configs.scale, self.configs.gamma)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
