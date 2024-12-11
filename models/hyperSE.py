@@ -16,11 +16,11 @@ EPS = 1e-6
 
 class HyperSE(nn.Module):
     def __init__(self, in_features, hidden_dim_enc, hidden_features, num_nodes, height=3, temperature=0.2,
-                 embed_dim=32, cl_dim=32, dropout=0.5, nonlin='relu', decay_rate=None, max_nums=None):
+                 embed_dim=32, cl_dim=32, dropout=0.5, nonlin='relu', decay_rate=None, max_nums=None, tau=2.):
         super(HyperSE, self).__init__()
         self.num_nodes = num_nodes
         self.height = height
-        self.tau = temperature
+        self.tau = tau
         self.manifold = Lorentz()
         self.encoder = LSENet(self.manifold, in_features, hidden_dim_enc, hidden_features,
                               num_nodes, height, temperature, embed_dim, dropout,
@@ -58,7 +58,7 @@ class HyperSE(nn.Module):
         z = self.proj(z[self.height])
         z_aug = self.proj(z_aug[self.height])
 
-        tree_cl_loss = self.tree_cl_loss(self.manifold, z, z_aug)
+        tree_cl_loss = self.tree_cl_loss(self.manifold, z, z_aug, self.tau)
 
         return (1 - gamma) * (se_loss + se_loss_aug) + scale * tree_cl_loss * gamma
 

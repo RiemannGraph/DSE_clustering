@@ -50,6 +50,7 @@ parser.add_argument('--top_k_aug', type=int, default=10, help="Top k number of s
 parser.add_argument('--gamma', type=float, default=0.8, help="rate of tree contrastive loss")
 parser.add_argument('--scale', type=float, default=0.1, help="scale of tree contrastive loss")
 parser.add_argument('--cl_dim', type=int, default=513, help="dimension of contrastive views")
+parser.add_argument('--tau', type=float, default=2., help="temperature for CL")
 
 parser.add_argument('--patience', type=int, default=5, help='early stopping patience')
 parser.add_argument('--save_path', type=str, default='model.pt')
@@ -61,14 +62,14 @@ parser.add_argument('--devices', type=str, default='0,1',
                     help='device ids of multiple gpus')
 
 configs = parser.parse_args()
-with open(f'./configs/{configs.dataset}.json', 'wt') as f:
-    json.dump(vars(configs), f, indent=4)
+# with open(f'./configs/{configs.dataset}.json', 'wt') as f:
+#     json.dump(vars(configs), f, indent=4)
 
 # configs_dict = vars(configs)
 # with open(f'./configs/{configs.dataset}.json', 'rt') as f:
 #     configs_dict.update(json.load(f))
 # configs = DotDict(configs_dict)
-f.close()
+# f.close()
 
 log_path = f"./results/{configs.version}/{configs.dataset}.log"
 configs.log_path = log_path

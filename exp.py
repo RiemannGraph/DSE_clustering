@@ -43,7 +43,8 @@ class Exp:
                             dropout=self.configs.dropout,
                             nonlin=self.configs.nonlin,
                             decay_rate=self.configs.decay_rate,
-                            max_nums=self.configs.max_nums).to(device)
+                            max_nums=self.configs.max_nums,
+                            tau=self.configs.tau).to(device)
             optimizer = RiemannianAdam(model.parameters(), lr=self.configs.lr, weight_decay=self.configs.w_decay)
             if self.configs.task == 'Clustering':
                 nmi, ari = self.train_clu(data, model, optimizer, logger, device, exp_iter)
