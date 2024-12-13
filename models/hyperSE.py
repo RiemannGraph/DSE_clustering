@@ -45,7 +45,7 @@ class HyperSE(nn.Module):
         self.clu_mat = clu_mat
         return self.embeddings[self.height]
 
-    def loss(self, data, scale=0.1, gamma=0.6):
+    def loss(self, data, scale=0.1, gamma=0.8):
         adj = data.adj.clone()
         aug_adj = data.aug_adj.clone()
         x = data.x.clone()
@@ -58,9 +58,9 @@ class HyperSE(nn.Module):
         z = self.proj(z[self.height])
         z_aug = self.proj(z_aug[self.height])
 
-        tree_cl_loss = self.tree_cl_loss(self.manifold, z, z_aug, self.tau)
+        tree_cl_loss = self.tree_cl_loss(self.manifold, z, z_aug, self.tau) * scale
 
-        return (1 - gamma) * (se_loss + se_loss_aug) + scale * tree_cl_loss * gamma
+        return (1 - gamma) * (se_loss + se_loss_aug) + tree_cl_loss * gamma
 
     @staticmethod
     def tree_cl_loss(manifold, z1, z2, tau=2.):
