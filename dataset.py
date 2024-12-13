@@ -12,7 +12,7 @@ import io
 import zipfile
 import numpy as np
 from models.layers import IsoTransform
-from utils.utils import normalize_adj
+from utils.utils import normalize_adj, adjacency2index
 
 
 def load_data(configs):
