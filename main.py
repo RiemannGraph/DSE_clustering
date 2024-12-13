@@ -51,6 +51,8 @@ parser.add_argument('--gamma', type=float, default=0.8, help="rate of tree contr
 parser.add_argument('--scale', type=float, default=0.1, help="scale of tree contrastive loss")
 parser.add_argument('--cl_dim', type=int, default=513, help="dimension of contrastive views")
 parser.add_argument('--tau', type=float, default=2., help="temperature for CL")
+parser.add_argument("--ax_i", type=int, default=1)
+parser.add_argument("--ax_j", type=int, default=2)
 
 parser.add_argument('--patience', type=int, default=5, help='early stopping patience')
 parser.add_argument('--save_path', type=str, default='model.pt')

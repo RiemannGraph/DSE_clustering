@@ -2,7 +2,6 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
-from geoopt.manifolds.stereographic.math import mobius_matvec, project, expmap0, mobius_add, logmap0
 from torch_scatter import scatter_sum, scatter_softmax
 from torch_geometric.utils import add_self_loops
 import math
@@ -112,13 +111,13 @@ class LorentzAssignment(nn.Module):
         self.manifold = manifold
         self.num_assign = num_assign
         self.assign_linear = nn.Sequential(
-            nn.Linear(in_features, num_assign, bias=False),
+            nn.Linear(in_features, num_assign, bias=bias),
                                            )
         self.temperature = temperature
         self.key_linear = LorentzLinear(manifold, in_features, hidden_features, bias=False)
         self.query_linear = LorentzLinear(manifold, in_features, hidden_features, bias=False)
         self.scalar_map = nn.Sequential(
-            nn.Linear(2 * hidden_features, 1, bias=False),
+            nn.Linear(2 * hidden_features, 1, bias=bias),
             nn.LeakyReLU()
         )
         self.dropout = nn.Dropout(dropout)
