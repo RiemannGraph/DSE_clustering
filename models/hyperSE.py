@@ -45,21 +45,21 @@ class HyperSE(nn.Module):
             clu_mat[k] = t
         return embeddings, clu_mat
     
-    def fix_cluster_results(self, clu_res_mat, embeds, epsInt: int = 10):
-        clu_nums = clu_res_mat.sum(0)   # (100, 1, 2, 3, 200,....)
+    def fix_cluster_results(self, clu_res_mat, embeds, epsInt: int = 7):
+        clu_nums = clu_res_mat.sum(0)
         clu_res = clu_res_mat.argmax(1)
-        corr_idx = clu_nums > epsInt # (true, false, false, false, true,....)
+        corr_idx = clu_nums > epsInt
         if torch.all(corr_idx):
             return clu_res
         idx = torch.arange(clu_res_mat.shape[1]).to(clu_res.device)
         idx = idx[corr_idx]
-        err_idx = torch.where(clu_res_mat[:, clu_nums <= epsInt] == 1.)[0]  # (N, 3)
+        err_idx = torch.where(clu_res_mat[:, clu_nums <= epsInt] == 1.)[0]
         node = embeds[self.height]
         parent = embeds[1]
-        error_node = node[err_idx]  # (6, D)
-        fixed_parent = parent[corr_idx]  #(7, D)
-        score = torch.softmax(2 + self.manifold.cinner(error_node, fixed_parent), dim=-1)
-        fixed_res = gumbel_softmax(torch.log(score + 1e-6), self.temperature)
+        error_node = node[err_idx]
+        fixed_parent = parent[corr_idx]
+        score = torch.log_softmax(2 + 2 * self.manifold.cinner(error_node, fixed_parent), dim=-1)
+        fixed_res = gumbel_softmax(score, self.temperature)
         fixed_res = idx[fixed_res.argmax(1)]
         clu_res[err_idx] = fixed_res
         return clu_res
