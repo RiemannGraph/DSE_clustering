@@ -71,8 +71,8 @@ class Exp:
             if epoch % self.configs.eval_freq == 0:
                 logger.info("-----------------------Evaluation Start---------------------")
                 model.eval()
-                _ = model(data)
-                predicts = model.clu_mat[1].argmax(1).cpu().numpy()
+                embeddings, clu_mat = model(data)
+                predicts = model.fix_cluster_results(clu_mat[1], embeddings).cpu().numpy()
                 trues = data.y.cpu().numpy()
                 acc, nmi, f1, ari = [], [], [], []
                 for step in range(n_cluster_trials):
@@ -114,13 +114,13 @@ class Exp:
         #                       num_nodes=embeddings.shape[0])
         # tree_graph = to_networkx_tree(tree, manifold, height=self.configs.height)
         # trues = data.y.cpu().numpy()
-        # _, color_dict = plot_leaves(tree_graph, manifold, embeddings, trues, height=self.configs.height,
+        # _, color_dict = plot_leaves(tree_graph, manifold, embeddings[self.configs.height], trues, height=self.configs.height,
         #                             save_path=f"./results/{self.configs.dataset}/{self.configs.dataset}_hyp_h{self.configs.height}_{exp_iter}_true.pdf")
         # predicts = model.clu_mat[1].argmax(1).cpu().numpy()
         # metrics = cluster_metrics(trues, predicts)
         # metrics.clusterAcc()
         # new_pred = metrics.new_predicts
-        # plot_leaves(tree_graph, manifold, embeddings, new_pred, height=self.configs.height,
+        # plot_leaves(tree_graph, manifold, embeddings[self.configs.height], new_pred, height=self.configs.height,
         #                             save_path=f"./results/{self.configs.dataset}/{self.configs.dataset}_hyp_h{self.configs.height}_{exp_iter}_pred.pdf",
         #             colors_dict=color_dict)
         for k, result in best_cluster_result.items():

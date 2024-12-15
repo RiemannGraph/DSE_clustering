@@ -26,6 +26,7 @@ class HyperSE(nn.Module):
                               num_nodes, height, temperature, embed_dim, dropout,
                               nonlin, decay_rate, max_nums)
         self.proj = LorentzTransformation(embed_dim + 1, cl_dim)
+        self.temperature = temperature
 
     def forward(self, data):
         features = data.x
@@ -42,8 +43,26 @@ class HyperSE(nn.Module):
             t = torch.zeros_like(v)
             t[torch.arange(t.shape[0]), idx] = 1.
             clu_mat[k] = t
-        self.clu_mat = clu_mat
-        return embeddings[self.height]
+        return embeddings, clu_mat
+    
+    def fix_cluster_results(self, clu_res_mat, embeds, epsInt: int = 10):
+        clu_nums = clu_res_mat.sum(0)   # (100, 1, 2, 3, 200,....)
+        clu_res = clu_res_mat.argmax(1)
+        corr_idx = clu_nums > epsInt # (true, false, false, false, true,....)
+        if torch.all(corr_idx):
+            return clu_res
+        idx = torch.arange(clu_res_mat.shape[1]).to(clu_res.device)
+        idx = idx[corr_idx]
+        err_idx = torch.where(clu_res_mat[:, clu_nums <= epsInt] == 1.)[0]  # (N, 3)
+        node = embeds[self.height]
+        parent = embeds[1]
+        error_node = node[err_idx]  # (6, D)
+        fixed_parent = parent[corr_idx]  #(7, D)
+        score = torch.softmax(2 + self.manifold.cinner(error_node, fixed_parent), dim=-1)
+        fixed_res = gumbel_softmax(torch.log(score + 1e-6), self.temperature)
+        fixed_res = idx[fixed_res.argmax(1)]
+        clu_res[err_idx] = fixed_res
+        return clu_res
 
     def loss(self, data, scale=0.1, gamma=0.8):
         adj = data.adj.clone()
