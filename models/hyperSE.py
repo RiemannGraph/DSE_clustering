@@ -59,7 +59,8 @@ class HyperSE(nn.Module):
         error_node = node[err_idx]
         fixed_parent = parent[corr_idx]
         score = torch.log_softmax(2 + 2 * self.manifold.cinner(error_node, fixed_parent), dim=-1)
-        fixed_res = gumbel_softmax(score, self.temperature)
+        # fixed_res = gumbel_softmax(score, self.temperature)
+        fixed_res = score
         fixed_res = idx[fixed_res.argmax(1)]
         clu_res[err_idx] = fixed_res
         return clu_res

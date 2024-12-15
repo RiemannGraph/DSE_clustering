@@ -133,7 +133,7 @@ class LorentzAssignment(nn.Module):
         score = scatter_softmax(score, src, dim=-1)
         att = torch.sparse_coo_tensor(edge_index, score, size=(x.shape[0], x.shape[0])).to(x.device)
         ass = torch.matmul(att, ass)   # (N_k, N_{k-1})
-        ass = gumbel_softmax(torch.log(ass + 1e-6), temperature=self.temperature)
+        # ass = gumbel_softmax(torch.log(ass + 1e-6), temperature=self.temperature)
         return ass
 
 
