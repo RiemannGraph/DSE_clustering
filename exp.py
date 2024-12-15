@@ -72,7 +72,7 @@ class Exp:
                 logger.info("-----------------------Evaluation Start---------------------")
                 model.eval()
                 embeddings, clu_mat = model(data)
-                predicts = model.fix_cluster_results(clu_mat[1], embeddings).cpu().numpy()
+                predicts = model.fix_cluster_results(clu_mat[1], embeddings, self.configs.epsInt).cpu().numpy()
                 trues = data.y.cpu().numpy()
                 acc, nmi, f1, ari = [], [], [], []
                 for step in range(n_cluster_trials):

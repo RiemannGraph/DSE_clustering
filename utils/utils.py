@@ -13,6 +13,10 @@ def select_activation(activation):
         return F.relu
     elif activation == 'sigmoid':
         return F.sigmoid
+    elif activation == 'tanh':
+        return F.tanh
+    elif activation == 'leaky_relu':
+        return F.leaky_relu
     elif activation is None:
         return None
     else:
