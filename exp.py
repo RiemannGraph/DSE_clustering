@@ -110,7 +110,7 @@ class Exp:
         # manifold = model.manifold.cpu()
         # tree = construct_tree(torch.tensor([i for i in range(data.x.shape[0])]).long(),
         #                       manifold,
-        #                       model.embeddings, model.clu_mat, height=self.configs.height,
+        #                       embeddings, model.clu_mat, height=self.configs.height,
         #                       num_nodes=embeddings.shape[0])
         # tree_graph = to_networkx_tree(tree, manifold, height=self.configs.height)
         # trues = data.y.cpu().numpy()

@@ -30,10 +30,10 @@ class HyperSE(nn.Module):
     def forward(self, data):
         features = data.x
         adj = data.adj.clone()
-        embeddings, ass_mat, _ = self.encoder(features, adj)
-        self.embeddings = {}
-        for height, x in embeddings.items():
-            self.embeddings[height] = x.detach()
+        coords, ass_mat, _ = self.encoder(features, adj)
+        embeddings = {}
+        for height, x in coords.items():
+            embeddings[height] = x.detach()
         clu_mat = {self.height: torch.eye(self.num_nodes).to(data.x.device)}
         for k in range(self.height - 1, 0, -1):
             clu_mat[k] = clu_mat[k + 1] @ ass_mat[k + 1]
@@ -43,7 +43,7 @@ class HyperSE(nn.Module):
             t[torch.arange(t.shape[0]), idx] = 1.
             clu_mat[k] = t
         self.clu_mat = clu_mat
-        return self.embeddings[self.height]
+        return embeddings[self.height]
 
     def loss(self, data, scale=0.1, gamma=0.8):
         adj = data.adj.clone()
