@@ -110,9 +110,7 @@ class LorentzAssignment(nn.Module):
         super(LorentzAssignment, self).__init__()
         self.manifold = manifold
         self.num_assign = num_assign
-        self.assign_linear = nn.Sequential(
-            nn.Linear(in_features, num_assign, bias=bias),
-        )
+        self.assign_linear = nn.Linear(in_features, num_assign, bias=bias)
         self.temperature = temperature
         self.key_linear = LorentzLinear(manifold, in_features, hidden_features, bias=False)
         self.query_linear = LorentzLinear(manifold, in_features, hidden_features, bias=False)

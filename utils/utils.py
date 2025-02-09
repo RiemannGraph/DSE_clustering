@@ -36,6 +36,11 @@ def Frechet_mean_poincare(manifold, embeddings, weights=None, keepdim=False):
     return z
 
 
+"""
+The codes of gumbel-softmax refers to
+https://github.com/YongfeiYan/Gumbel_Softmax_VAE/blob/master/gumbel_softmax_vae.py
+"""
+
 def sample_gumbel(shape, eps=1e-20):
     U = torch.rand(shape)
     return -torch.log(-torch.log(U + eps) + eps)
@@ -65,25 +70,6 @@ def gumbel_softmax(logits, temperature=0.2, hard=False):
     # Set gradients w.r.t. y_hard gradients w.r.t. y
     y_hard = (y_hard - y).detach() + y
     return y_hard
-
-
-def gumbel_sigmoid(logits, tau: float = 1, hard: bool = False, threshold: float = 0.5):
-    gumbels = (
-        -torch.empty_like(logits, memory_format=torch.legacy_contiguous_format).exponential_().log()
-    )  # ~Gumbel(0, 1)
-    gumbels = (logits + gumbels) / tau  # ~Gumbel(logits, tau)
-    y_soft = gumbels.sigmoid()
-
-    if hard:
-        # Straight through.
-        indices = (y_soft > threshold).nonzero(as_tuple=True)
-        y_hard = torch.zeros_like(logits, memory_format=torch.legacy_contiguous_format)
-        y_hard[indices[0], indices[1]] = 1.0
-        ret = y_hard - y_soft.detach() + y_soft
-    else:
-        # Reparametrization trick.
-        ret = y_soft
-    return ret
 
 
 def graph_top_K(dense_adj, k):
