@@ -100,9 +100,9 @@ class cluster_metrics:
 
         l2 = list(set(self.pred_label))
         numclass2 = len(l2)
-        if numclass1 != numclass2:
-            print('Class Not equal, Error!!!!')
-            return 0, 0, 0, 0, 0, 0, 0
+        # if numclass1 != numclass2:
+        #     print('Class Not equal, Error!!!!')
+        #     return 0, 0, 0, 0, 0, 0, 0
 
         cost = np.zeros((numclass1, numclass2), dtype=int)
         for i, c1 in enumerate(l1):

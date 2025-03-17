@@ -1,9 +1,6 @@
-import numpy as np
 import torch
-import torch.nn.functional as F
 import torch.nn as nn
-from torch_scatter import scatter_sum, scatter_softmax
-from torch_geometric.utils import add_self_loops
+from torch_scatter import scatter_softmax
 import math
 from utils.utils import gumbel_softmax, normalize_adj, graph_top_K, givens_rot_mat
 
@@ -110,7 +107,9 @@ class LorentzAssignment(nn.Module):
         super(LorentzAssignment, self).__init__()
         self.manifold = manifold
         self.num_assign = num_assign
-        self.assign_linear = nn.Linear(in_features, num_assign, bias=bias)
+        self.assign_linear = nn.Sequential(
+            nn.Linear(in_features, num_assign, bias=bias),
+        )
         self.temperature = temperature
         self.key_linear = LorentzLinear(manifold, in_features, hidden_features, bias=False)
         self.query_linear = LorentzLinear(manifold, in_features, hidden_features, bias=False)
@@ -131,7 +130,7 @@ class LorentzAssignment(nn.Module):
         score = scatter_softmax(score, src, dim=-1)
         att = torch.sparse_coo_tensor(edge_index, score, size=(x.shape[0], x.shape[0])).to(x.device)
         ass = torch.matmul(att, ass)   # (N_k, N_{k-1})
-        # ass = gumbel_softmax(torch.log(ass + 1e-6), temperature=self.temperature)
+        ass = gumbel_softmax(torch.log(ass + 1e-6), temperature=self.temperature)
         return ass
 
 
@@ -191,7 +190,6 @@ class IsoTransform(nn.Module):
         A = normalize_adj(A, sparse=True)
         A = self.alpha * A + (1 - self.alpha) * raw_adj
         return A
-
 
 class LorentzTransformation(nn.Module):
     """

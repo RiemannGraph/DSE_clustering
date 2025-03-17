@@ -1,11 +1,10 @@
 import geoopt
 import torch
-import geoopt.manifolds.stereographic.math as math
 import geoopt.manifolds.lorentz.math as lmath
 
 
 class Poincare(geoopt.PoincareBall):
-    def __init__(self, c=1.0, learnable=False):
+    def __init__(self, c=0.8, learnable=False):
         super(Poincare, self).__init__(c=c, learnable=learnable)
 
     def from_lorentz(self, x, dim=-1):

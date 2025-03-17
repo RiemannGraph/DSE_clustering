@@ -36,11 +36,6 @@ def Frechet_mean_poincare(manifold, embeddings, weights=None, keepdim=False):
     return z
 
 
-"""
-The codes of gumbel-softmax refers to
-https://github.com/YongfeiYan/Gumbel_Softmax_VAE/blob/master/gumbel_softmax_vae.py
-"""
-
 def sample_gumbel(shape, eps=1e-20):
     U = torch.rand(shape)
     return -torch.log(-torch.log(U + eps) + eps)
@@ -70,6 +65,25 @@ def gumbel_softmax(logits, temperature=0.2, hard=False):
     # Set gradients w.r.t. y_hard gradients w.r.t. y
     y_hard = (y_hard - y).detach() + y
     return y_hard
+
+
+def gumbel_sigmoid(logits, tau: float = 1, hard: bool = False, threshold: float = 0.5):
+    gumbels = (
+        -torch.empty_like(logits, memory_format=torch.legacy_contiguous_format).exponential_().log()
+    )  # ~Gumbel(0, 1)
+    gumbels = (logits + gumbels) / tau  # ~Gumbel(logits, tau)
+    y_soft = gumbels.sigmoid()
+
+    if hard:
+        # Straight through.
+        indices = (y_soft > threshold).nonzero(as_tuple=True)
+        y_hard = torch.zeros_like(logits, memory_format=torch.legacy_contiguous_format)
+        y_hard[indices[0], indices[1]] = 1.0
+        ret = y_hard - y_soft.detach() + y_soft
+    else:
+        # Reparametrization trick.
+        ret = y_soft
+    return ret
 
 
 def graph_top_K(dense_adj, k):
@@ -117,20 +131,35 @@ def index2adjacency(N, edge_index, weight=None, is_sparse=True):
     return adjacency
 
 
-def normalize_adj(adj, sparse=False):
+# def normalize_adj(adj, sparse=False):
+#     if sparse:
+#         adj = adj.coalesce()
+#         degree = adj.sum(1)
+#         d_idx = degree.indices().reshape(-1)
+#         inv_sqrt_degree = torch.zeros(degree.shape).to(adj.device)
+#         inv_sqrt_degree[d_idx] = 1. / (torch.sqrt(degree.values()))
+#         a_idx = adj.indices()
+#         div = inv_sqrt_degree[a_idx[0]] * inv_sqrt_degree[a_idx[1]]
+#         weight = adj.values() * div
+#         return torch.sparse_coo_tensor(adj.indices(), weight, adj.size())
+#     else:
+#         degree_matrix = 1. / (torch.sqrt(adj.sum(-1)) + 1e-10)
+#         return torch.diag(degree_matrix) @ adj @ torch.diag(degree_matrix)
+
+def normalize_adj(adj, sparse=True):
     if sparse:
         adj = adj.coalesce()
-        degree = adj.sum(1)
-        d_idx = degree.indices().reshape(-1)
-        inv_sqrt_degree = torch.zeros(degree.shape).to(adj.device)
-        inv_sqrt_degree[d_idx] = 1. / (torch.sqrt(degree.values()))
-        a_idx = adj.indices()
-        div = inv_sqrt_degree[a_idx[0]] * inv_sqrt_degree[a_idx[1]]
-        weight = adj.values() * div
-        return torch.sparse_coo_tensor(adj.indices(), weight, adj.size())
+        row_sum = adj.sum(dim=1).to_dense()
+        deg_inv_sqrt = row_sum.pow(-0.5)
+        deg_inv_sqrt[deg_inv_sqrt == float('inf')] = 0
+        norm_adj = deg_inv_sqrt.view(-1, 1) * adj * deg_inv_sqrt.view(1, -1)
     else:
-        degree_matrix = 1. / (torch.sqrt(adj.sum(-1)) + 1e-10)
-        return torch.diag(degree_matrix) @ adj @ torch.diag(degree_matrix)
+        row_sum = adj.sum(dim=1)
+        deg_inv_sqrt = row_sum.pow(-0.5)
+        deg_inv_sqrt[deg_inv_sqrt == float('inf')] = 0
+        norm_adj = deg_inv_sqrt.view(-1, 1) * adj * deg_inv_sqrt.view(1, -1)
+
+    return norm_adj
 
 
 def givens_rot_mat(i, j, theta: torch.Tensor, n):

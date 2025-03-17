@@ -2,15 +2,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from torch_scatter import scatter_sum
-from utils.decode import construct_tree
-from models.layers import LSENetLayer, LorentzGraphConvolution
+from models.layers import LSENetLayer
 from models.encoders import GraphEncoder
-from manifold.lorentz import Lorentz
 from utils.utils import select_activation
 from models.encoders import GraphEncoder
-import math
-from torch_geometric.utils import dropout_edge
 
 
 class LSENet(nn.Module):

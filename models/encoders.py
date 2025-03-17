@@ -1,8 +1,6 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from models.layers import LorentzGraphConvolution
-from utils.utils import select_activation
 
 
 class GraphEncoder(nn.Module):

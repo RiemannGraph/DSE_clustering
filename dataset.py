@@ -1,8 +1,5 @@
-from typing import Union
-
 import torch
 import networkx as nx
-import torch_geometric.datasets
 from torch_geometric.data import Dataset, Data
 from torch_geometric.data.data import BaseData
 from torch_geometric.datasets import (Amazon, KarateClub, Planetoid, WebKB)

@@ -1,9 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import networkx as nx
-import pydot
 from networkx.drawing.nx_pydot import graphviz_layout
-
+from scipy.optimize import linear_sum_assignment
+from sklearn.manifold import TSNE
 
 def mobius_add(x, y):
     """Mobius addition in numpy."""
@@ -92,3 +92,70 @@ def plot_nx_graph(G: nx.Graph, root, save_path=None):
     nx.draw(G, pos, ax=ax, with_labels=True)
     plt.savefig(save_path)
     plt.show()
+
+
+def map_labels(true_labels, predicted_labels):
+    D = np.zeros((np.unique(true_labels).size, np.unique(predicted_labels).size))
+    for i, tl in enumerate(np.unique(true_labels)):
+        for j, pl in enumerate(np.unique(predicted_labels)):
+            D[i, j] = np.sum((true_labels == tl) & (predicted_labels == pl))
+
+    row_ind, col_ind = linear_sum_assignment(-D)
+
+    label_map = {}
+    for i, j in zip(row_ind, col_ind):
+        label_map[np.unique(true_labels)[i]] = np.unique(predicted_labels)[j]
+
+    new_true_labels = np.vectorize(label_map.get)(true_labels)
+    new_predicted_labels = predicted_labels
+
+    return new_true_labels, new_predicted_labels
+
+
+def plot_tsne(z, true_labels, predicted_labels, sample_num=7000, output_path="tsne_visualization.pdf"):
+    """
+    Visualize embedding by t-SNE with true and predicted labels using circles, and save the figures as PDF.
+    """
+    new_true_labels, new_predicted_labels = map_labels(true_labels, predicted_labels)
+
+    sample_embeds = z
+    sample_true_label = new_true_labels
+    sample_predict_label = new_predicted_labels
+
+    ts = TSNE(n_components=2, init='pca', random_state=0)
+    ts_embeds = ts.fit_transform(sample_embeds)
+
+    x_min, x_max = np.min(ts_embeds, 0), np.max(ts_embeds, 0)
+    norm_ts_embeds = (ts_embeds - x_min) / (x_max - x_min)
+
+    custom_colors = ['#ffff4e', '#329932', '#2a2aff', '#ff0f0f', '#8a148a', '#ffae1c', '#bf80bf', '#9a9a9a']
+
+    all_labels = np.unique(np.concatenate([sample_true_label, sample_predict_label]))
+    label_color_map = {label: custom_colors[i % len(custom_colors)] for i, label in enumerate(all_labels)}
+
+    fig_true, ax_true = plt.subplots(figsize=(8, 8))
+    for label in all_labels:
+        class_mask = sample_true_label == label
+        ax_true.scatter(norm_ts_embeds[class_mask, 0], norm_ts_embeds[class_mask, 1],
+                        color=label_color_map[label], s=10, label=f'Class {label}')
+    ax_true.set_title('t-SNE with True Labels', fontsize=14)
+    ax_true.set_xticks([])
+    ax_true.set_yticks([])
+    ax_true.axis('off')
+
+    fig_pred, ax_pred = plt.subplots(figsize=(8, 8))
+    for label in all_labels:
+        class_mask = sample_predict_label == label
+        ax_pred.scatter(norm_ts_embeds[class_mask, 0], norm_ts_embeds[class_mask, 1],
+                        color=label_color_map[label], s=10, label=f'Class {label}')
+    ax_pred.set_title('t-SNE with Predicted Labels', fontsize=14)
+    ax_pred.set_xticks([])
+    ax_pred.set_yticks([])
+    ax_pred.axis('off')
+
+    fig_true.savefig(output_path.replace(".pdf", "_true.pdf"), bbox_inches='tight')
+    fig_pred.savefig(output_path.replace(".pdf", "_pred.pdf"), bbox_inches='tight')
+    plt.show()
+
+    return fig_true, fig_pred
+

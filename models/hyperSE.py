@@ -1,13 +1,8 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import numpy as np
-from utils.utils import gumbel_softmax, graph_top_K
-from torch_scatter import scatter_sum
-from models.layers import IsoTransform, LorentzTransformation
+from utils.utils import gumbel_softmax
+from models.layers import LorentzTransformation
 from manifold.lorentz import Lorentz
-from models.encoders import GraphEncoder
-import math
 from models.l_se_net import LSENet
 
 MIN_NORM = 1e-15
@@ -59,8 +54,7 @@ class HyperSE(nn.Module):
         error_node = node[err_idx]
         fixed_parent = parent[corr_idx]
         score = torch.log_softmax(2 + 2 * self.manifold.cinner(error_node, fixed_parent), dim=-1)
-        # fixed_res = gumbel_softmax(score, self.temperature)
-        fixed_res = score
+        fixed_res = gumbel_softmax(score, self.temperature)
         fixed_res = idx[fixed_res.argmax(1)]
         clu_res[err_idx] = fixed_res
         return clu_res
@@ -68,6 +62,7 @@ class HyperSE(nn.Module):
     def loss(self, data, scale=0.1, gamma=0.8):
         adj = data.adj.clone()
         aug_adj = data.aug_adj.clone()
+        edge_index = data.edge_index
         x = data.x.clone()
         z, ass_mats, adj_set = self.encoder(x, adj)
         z_aug, ass_mats_aug, adj_aug_set = self.encoder(x, aug_adj)
@@ -78,22 +73,36 @@ class HyperSE(nn.Module):
         z = self.proj(z[self.height])
         z_aug = self.proj(z_aug[self.height])
 
-        tree_cl_loss = self.tree_cl_loss(self.manifold, z, z_aug, self.tau) * scale
+        tree_cl_loss = self.tree_cl_loss(self.manifold, z, z_aug, edge_index, self.tau, neg_ratio=0.3) * scale
 
         return (1 - gamma) * (se_loss + se_loss_aug) + tree_cl_loss * gamma
 
     @staticmethod
-    def tree_cl_loss(manifold, z1, z2, tau=2.):
-        sim = 2. + 2 * manifold.cinner(z1, z2)
-        sim = -torch.log_softmax(sim / tau, dim=-1).diag()
-        loss = torch.mean(sim)
-        return loss
+    def tree_cl_loss(manifold, z1, z2, edge_index, tau=2.0, neg_ratio=0.1):
+        device = z1.device
+    
+        pos_sim = torch.clamp(2.0 + 2.0 * manifold.cinner(z1, z2), min=-1.0, max=1.0)
+        pos_exp = torch.exp(pos_sim / tau)
+    
+        row, col = edge_index
+        num_edges = row.size(0)
+        neg_sample_size = max(1, int(num_edges * neg_ratio))
+    
+        neg_idx = torch.randint(0, col.size(0), (neg_sample_size,), device=device)
+        neg_row, neg_col = row[neg_idx], col[neg_idx]
+    
+        neg_sim = torch.clamp(2.0 + 2.0 * manifold.cinner(z1[neg_row], z2[neg_col]), min=-1.0, max=1.0)
+        neg_exp = torch.exp(neg_sim / tau).sum()
+    
+        loss = -torch.log(pos_exp / (pos_exp + neg_exp))
+        return loss.mean()
+
 
     @staticmethod
     def se_loss(height, adj_set: dict, ass_mats: dict, eps: float = 1e-6):
         se_loss = 0
         vol_G = adj_set[height].sum()
-
+    
         for k in range(height, 0, -1):
             adj_dense = adj_set[k].to_dense()
             degree = adj_dense.sum(dim=1)

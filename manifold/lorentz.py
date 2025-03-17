@@ -1,6 +1,5 @@
 import geoopt
 import torch
-import geoopt.manifolds.lorentz.math as lmath
 
 
 class Lorentz(geoopt.Lorentz):
