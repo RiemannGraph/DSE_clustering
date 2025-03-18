@@ -20,7 +20,7 @@ torch.cuda.manual_seed_all(seed)
 parser = argparse.ArgumentParser(description='Lorentz Structural Entropy')
 
 # Experiment settings
-parser.add_argument('--dataset', type=str, default='Cora')
+parser.add_argument('--dataset', type=str, default='Photo')
 parser.add_argument('--task', type=str, default='Clustering',
                     choices=['Clustering'])
 parser.add_argument('--root_path', type=str, default='datasets')
@@ -69,8 +69,8 @@ parser.add_argument('--devices', type=str, default='0,1',
 
 
 configs = parser.parse_args()
-with open(f'./configs/{configs.dataset}.json', 'wt') as f:
-    json.dump(vars(configs), f, indent=4)
+# with open(f'./configs/{configs.dataset}.json', 'wt') as f:
+#     json.dump(vars(configs), f, indent=4)
 
 configs_dict = vars(configs)
 with open(f'./configs/{configs.dataset}.json', 'rt') as f:

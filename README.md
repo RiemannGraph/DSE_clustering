@@ -1,6 +1,6 @@
 # IsoSEL: Isometric Structural Entropy Learning for Deep Graph Clustering in Hyperbolic Space
 
-The Extension of [ICML2024 (**Oral**)]: LSEnet: Lorentz Structural Entropy Neural Network for Deep Graph Clustering.
+The Extension of [ICML2024 (**Oral**)]: [LSEnet: Lorentz Structural Entropy Neural Network for Deep Graph Clustering](https://arxiv.org/abs/2405.11801).
 
 ## Get Started
 Firstly, install all the required pakages and ```Python==3.9.0```.

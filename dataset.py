@@ -14,7 +14,7 @@ from utils.utils import normalize_adj, adjacency2index
 
 def load_data(configs):
     dataset = None
-    if configs.dataset in ["computers", "photo"]:
+    if configs.dataset in ["computers", "Photo"]:
         dataset = Amazon(configs.root_path, name=configs.dataset)
     elif configs.dataset in ['Cora', 'Citeseer', 'PubMed']:
         dataset = Planetoid(configs.root_path, name=configs.dataset)
