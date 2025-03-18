@@ -1,0 +1,14 @@
+geoopt==0.5.0
+matplotlib==3.8.2
+munkres==1.1.4
+networkx==2.8
+numpy==1.24.3
+pydot==2.0.0
+scikit_learn==1.6.1
+scipy==1.15.2
+torch==2.5.1+cu121
+torch_geometric==2.6.1
+torch_scatter==2.1.2+pt25cu121
+~andas==1.4.3
+~atplotlib==3.7.2
+~umpy==1.22.4
