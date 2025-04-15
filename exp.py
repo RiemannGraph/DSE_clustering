@@ -39,7 +39,7 @@ class Exp:
                             tau=self.configs.tau).to(device)
             optimizer = RiemannianAdam(model.parameters(), lr=self.configs.lr, weight_decay=self.configs.w_decay)
             if self.configs.task == 'Clustering':
-                nmi, ari = self.train_clu(data, model, optimizer, logger, device, exp_iter)
+                nmi, ari = self.train_clu(data, model, optimizer, logger)
                 total_nmi.append(nmi)
                 total_ari.append(ari)
 
