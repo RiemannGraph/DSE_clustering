@@ -145,7 +145,7 @@ class cluster_metrics:
             acc, f1_macro, precision_macro, recall_macro, f1_micro, precision_micro, recall_micro = self.clusterAcc()
             return acc, nmi, f1_macro, adjscore
         else:
-            return 0, nmi, 0, adjscore
+            return nmi, adjscore
 
 
 def cal_AUC_AP(scores, trues):

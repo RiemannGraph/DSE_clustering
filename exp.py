@@ -20,10 +20,8 @@ class Exp:
         device = self.device
         data = load_data(self.configs).to(device)
 
-        total_acc = []
         total_nmi = []
         total_ari = []
-        total_f1 = []
         for exp_iter in range(self.configs.exp_iters):
             logger.info(f"\ntrain iters {exp_iter}")
             model = HyperSE(in_features=data.x.shape[1],
@@ -41,21 +39,17 @@ class Exp:
                             tau=self.configs.tau).to(device)
             optimizer = RiemannianAdam(model.parameters(), lr=self.configs.lr, weight_decay=self.configs.w_decay)
             if self.configs.task == 'Clustering':
-                acc, nmi, ari, f1 = self.train_clu(data, model, optimizer, logger, device, exp_iter)
-                total_acc.append(acc)
+                nmi, ari = self.train_clu(data, model, optimizer, logger, device, exp_iter)
                 total_nmi.append(nmi)
                 total_ari.append(ari)
-                total_f1.append(f1)
 
         if self.configs.task == 'Clustering':
-            logger.info(f"ACC: {np.mean(total_acc)}+-{np.std(total_acc)}, "
-                        f"NMI: {np.mean(total_nmi)}+-{np.std(total_nmi)}, "
-                        f"ARI: {np.mean(total_ari)}+-{np.std(total_ari)},"
-                        f"F1: {np.mean(total_f1)}+-{np.std(total_f1)}")
+            logger.info(f"NMI: {np.mean(total_nmi)}+-{np.std(total_nmi)}, "
+                        f"ARI: {np.mean(total_ari)}+-{np.std(total_ari)}")
 
-    def train_clu(self, data, model, optimizer, logger, device, exp_iter):
+    def train_clu(self, data, model, optimizer, logger):
         best_cluster_result = {}
-        best_cluster = {'acc': 0, 'nmi': 0, 'f1': 0, 'ari': 0}
+        best_cluster = {'nmi': 0, 'ari': 0}
 
         logger.info("--------------------------Training Start-------------------------")
         n_cluster_trials = self.configs.n_cluster_trials
@@ -76,43 +70,32 @@ class Exp:
                 embeddings, clu_mat = model(data)
                 predicts = model.fix_cluster_results(clu_mat[1], embeddings, self.configs.epsInt).cpu().numpy()
                 trues = data.y.cpu().numpy()
-                acc, nmi, f1, ari = [], [], [], []
+                nmi, ari = [], []
                 for step in range(n_cluster_trials):
                     metrics = cluster_metrics(trues, predicts)
-                    acc_, nmi_, f1_, ari_ = metrics.evaluateFromLabel(use_acc=False)
-                    acc.append(acc_)
+                    nmi_, ari_ = metrics.evaluateFromLabel(use_acc=False)
                     nmi.append(nmi_)
-                    f1.append(f1_)
                     ari.append(ari_)
-                acc, nmi, f1, ari = np.mean(acc), np.mean(nmi), np.mean(f1), np.mean(ari)
+                nmi, ari = np.mean(nmi), np.mean(ari)
 
                 epoch_nmi.append(nmi)
                 epoch_ari.append(ari)
 
-                if acc > best_cluster['acc']:
-                    best_cluster['acc'] = acc
-                    best_cluster_result['acc'] = [acc, nmi, f1, ari]
-                    torch.save(model, "model.pt")
                 if nmi > best_cluster['nmi']:
                     best_cluster['nmi'] = nmi
-                    best_cluster_result['nmi'] = [acc, nmi, f1, ari]
+                    best_cluster_result['nmi'] = [nmi, ari]
                     logger.info('------------------Saving best model-------------------')
                     torch.save(model.state_dict(), f"./checkpoints/{self.configs.save_path}")
-                if f1 > best_cluster['f1']:
-                    best_cluster['f1'] = f1
-                    best_cluster_result['f1'] = [acc, nmi, f1, ari]
                 if ari > best_cluster['ari']:
                     best_cluster['ari'] = ari
-                    best_cluster_result['ari'] = [acc, nmi, f1, ari]
+                    best_cluster_result['ari'] = [nmi, ari]
                 logger.info(
-                    f"Epoch {epoch}: ACC: {acc}, NMI: {nmi}, F1: {f1}, ARI: {ari}")
+                    f"Epoch {epoch}: NMI: {nmi}, ARI: {ari}")
                 logger.info(
                     "-------------------------------------------------------------------------")
 
-
-
         for k, result in best_cluster_result.items():
-            acc, nmi, f1, ari = result
+            nmi, ari = result
             logger.info(
-                f"Best Results according to {k}: ACC: {acc}, NMI: {nmi}, F1: {f1}, ARI: {ari} \n")
-        return best_cluster['acc'], best_cluster['nmi'], best_cluster["ari"], best_cluster['f1']
+                f"Best Results according to {k}: NMI: {nmi}, ARI: {ari} \n")
+        return best_cluster['nmi'], best_cluster["ari"]
