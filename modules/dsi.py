@@ -63,13 +63,13 @@ class DSI(nn.Module):
         clu_res[err_idx] = fixed_res
         return clu_res
 
-    def hybird_loss(self, data, freeze_levels=None, gamma=0.8):
+    def hybird_loss(self, data, freeze_levels=None, gamma=0.8, scale=0.35):
         tree_coord_dict, ass_dict, adj_dict = self.encoder(data.x, data.adj, freeze_levels)
         tree_coord_aug_dict, ass_aug_dict, adj_aug_dict = self.encoder(data.x, data.adj_aug, freeze_levels)
         se_loss = self.se_loss(ass_dict, adj_dict) + self.se_loss(ass_aug_dict, adj_aug_dict)
         z_leaf = self.lorentz_proj(tree_coord_dict[self.height])
         z_leaf_aug = self.lorentz_proj(tree_coord_aug_dict[self.height])
-        cl_loss = self.tree_cl_loss(z_leaf, z_leaf_aug, data.edge_index, self.tau, neg_ratio=0.3)
+        cl_loss = self.tree_cl_loss(z_leaf, z_leaf_aug, data.edge_index, self.tau, neg_ratio=0.3) * scale
         if freeze_levels is not None:
             cl_loss = cl_loss.detach()
         return gamma * se_loss + (1 - gamma) * cl_loss

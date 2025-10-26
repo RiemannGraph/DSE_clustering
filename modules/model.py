@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from modules.layers import LSENetLayer
+from modules.layers import LSENetLayer, LorentzGraphConvolution
 from utils.model_utils import select_activation
 
 
@@ -14,7 +14,9 @@ class LSENet(nn.Module):
         self.height = len(max_nums) + 1
 
         # Project input to Lorentz space (d+1)
-        self.input_proj = nn.Linear(in_dim, hid_dim)
+        self.input_proj = LorentzGraphConvolution(manifold, in_dim + 1, hid_dim + 1,
+                                                  True, dropout, False,
+                                                  select_activation(nonlin_str))
         self.dropout = nn.Dropout(dropout)
 
         # Build layers bottom-up: layer[0] = leaf → level H-1; layer[-1] = level 1 → root
@@ -28,12 +30,12 @@ class LSENet(nn.Module):
             ))
             curr_dim = hid_dim + 1  # parent embedding dim
 
-    def embed_leaf(self, x):
+    def embed_leaf(self, x, adj):
         # Map raw features to Lorentz leaf embedding
-        x = self.dropout(self.input_proj(x))          # (N, d)
         o = torch.zeros_like(x[:, :1])                # (N, 1)
         x = torch.cat([o, x], dim=1)           # (N, d+1)
         x = self.manifold.expmap0(x)                  # project to Lorentz
+        x = self.dropout(self.input_proj(x, adj))  # (N, d + 1)
         return x
 
     def forward(self, x, adj, freeze_levels=None):
@@ -46,7 +48,7 @@ class LSENet(nn.Module):
                 - Layer i corresponds to assignment from level (H - i) → (H - i - 1)
                 - So layer 0 → level H → H-1; layer -1 → level 1 → 0 (root)
         """
-        z = self.embed_leaf(x)
+        z = self.embed_leaf(x, adj)
         tree_coord_dict = {self.height: z}
         ass_dict = {}
         adj_dict = {self.height: adj}
