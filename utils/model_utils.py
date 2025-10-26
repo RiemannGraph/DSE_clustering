@@ -2,10 +2,6 @@ import torch
 import torch.nn.functional as F
 
 
-def grad_round(x):
-    return torch.round(x) - x.detach() + x
-
-
 def select_activation(activation):
     if activation == 'elu':
         return F.elu
@@ -17,13 +13,15 @@ def select_activation(activation):
         return F.tanh
     elif activation == 'leaky_relu':
         return F.leaky_relu
+    elif activation == "gelu":
+        return F.gelu
     elif activation is None:
         return None
     else:
         raise NotImplementedError('the non_linear_function is not implemented')
 
 
-def Frechet_mean_poincare(manifold, embeddings, weights=None, keepdim=False):
+def frechet_mean_poincare(manifold, embeddings, weights=None, keepdim=False):
     z = manifold.from_poincare(embeddings)
     if weights is None:
         z = torch.sum(z, dim=0, keepdim=True)
@@ -130,21 +128,6 @@ def index2adjacency(N, edge_index, weight=None, is_sparse=True):
         adjacency = torch.sparse_coo_tensor(indices=edge_index, values=weight, size=(N, N))
     return adjacency
 
-
-# def normalize_adj(adj, sparse=False):
-#     if sparse:
-#         adj = adj.coalesce()
-#         degree = adj.sum(1)
-#         d_idx = degree.indices().reshape(-1)
-#         inv_sqrt_degree = torch.zeros(degree.shape).to(adj.device)
-#         inv_sqrt_degree[d_idx] = 1. / (torch.sqrt(degree.values()))
-#         a_idx = adj.indices()
-#         div = inv_sqrt_degree[a_idx[0]] * inv_sqrt_degree[a_idx[1]]
-#         weight = adj.values() * div
-#         return torch.sparse_coo_tensor(adj.indices(), weight, adj.size())
-#     else:
-#         degree_matrix = 1. / (torch.sqrt(adj.sum(-1)) + 1e-10)
-#         return torch.diag(degree_matrix) @ adj @ torch.diag(degree_matrix)
 
 def normalize_adj(adj, sparse=True):
     if sparse:

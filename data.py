@@ -8,8 +8,8 @@ import urllib.request
 import io
 import zipfile
 import numpy as np
-from models.layers import IsoTransform
-from utils.utils import normalize_adj, adjacency2index
+from modules.layers import IsoTransform
+from utils.model_utils import normalize_adj, adjacency2index
 
 
 def load_data(configs):
@@ -32,7 +32,7 @@ def load_data(configs):
                                        values=torch.ones(data.edge_index.shape[1]),
                                        size=(N, N))
     data.adj = normalize_adj(data.adj, sparse=True)
-    data.aug_adj = IsoTransform(configs.ax_i, configs.ax_j, configs.L, configs.top_k_sim, configs.top_k_aug, configs.omega, configs.alpha)(data.x, data.adj)
+    data.adj_aug = IsoTransform(configs.ax_i, configs.ax_j, configs.L, configs.top_k_sim, configs.top_k_aug, configs.omega, configs.alpha)(data.x, data.adj)
     data.num_classes = data.y.max().item()
     return data
 

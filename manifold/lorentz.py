@@ -24,7 +24,7 @@ class Lorentz(geoopt.Lorentz):
         )
         return res
 
-    def Frechet_mean(self, x, weights=None, keepdim=False):
+    def frechet_mean(self, x, weights=None, keepdim=False):
         if weights is None:
             z = torch.sum(x, dim=0, keepdim=True)
         else:

@@ -20,17 +20,16 @@ torch.cuda.manual_seed_all(seed)
 parser = argparse.ArgumentParser(description='Lorentz Structural Entropy')
 
 # Experiment settings
-parser.add_argument('--dataset', type=str, default='Photo')
+parser.add_argument('--dataset', type=str, default='Cora')
 parser.add_argument('--task', type=str, default='Clustering',
                     choices=['Clustering'])
 parser.add_argument('--root_path', type=str, default='datasets')
-parser.add_argument('--eval_freq', type=int, default=2)
+parser.add_argument('--eval_freq', type=int, default=10)
 parser.add_argument('--exp_iters', type=int, default=5)
 parser.add_argument('--version', type=str, default="run")
 parser.add_argument('--log_path', type=str, default="./results/FootBall.log")
 
 parser.add_argument('--epochs', type=int, default=1500)
-parser.add_argument('--height', type=int, default=2)
 parser.add_argument('--lr', type=float, default=1e-3)
 parser.add_argument('--w_decay', type=float, default=1e-2)
 parser.add_argument('--decay_rate', type=float, default=None)
@@ -51,7 +50,6 @@ parser.add_argument('--alpha', type=float, default=0.1, help="rate of augmentati
 parser.add_argument('--top_k_sim', type=int, default=20, help="Top k number of sparsify")
 parser.add_argument('--top_k_aug', type=int, default=12, help="Top k number of sparsify")
 parser.add_argument('--gamma', type=float, default=0.8, help="rate of tree contrastive loss")
-parser.add_argument('--scale', type=float, default=0.15, help="scale of tree contrastive loss")
 parser.add_argument('--cl_dim', type=int, default=513, help="dimension of contrastive views")
 parser.add_argument('--tau', type=float, default=2.0, help="temperature for CL")
 parser.add_argument("--ax_i", type=int, default=1)

@@ -15,7 +15,7 @@ class Node:
         self.height = height
 
 
-def construct_tree(nodes_list: torch.LongTensor, manifold, coords_list: dict,
+def construct_tree(nodes_list: torch.LongTensor, coords_list: dict,
                    ass_list: dict, height, num_nodes):
     nodes_count = num_nodes
     que = Queue()

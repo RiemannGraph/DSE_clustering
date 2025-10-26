@@ -22,7 +22,7 @@ class Poincare(geoopt.PoincareBall):
         )
         return res
 
-    def Frechet_mean(self, embeddings, weights=None, keepdim=False):
+    def frechet_mean(self, embeddings, weights=None, keepdim=False):
         z = self.to_lorentz(embeddings)
         if weights is None:
             z = torch.sum(z, dim=0, keepdim=True)

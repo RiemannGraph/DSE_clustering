@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch_scatter import scatter_softmax
 import math
-from utils.utils import gumbel_softmax, normalize_adj, graph_top_K, givens_rot_mat
+from utils.model_utils import gumbel_softmax, graph_top_K, normalize_adj, givens_rot_mat
 
 
 class LorentzGraphConvolution(nn.Module):
@@ -10,10 +10,10 @@ class LorentzGraphConvolution(nn.Module):
     Hyperbolic graph convolution layer.
     """
 
-    def __init__(self, manifold, in_features, out_features, use_bias, dropout, use_att, nonlin=None):
+    def __init__(self, manifold, in_dim, out_dim, use_bias, dropout, use_att, nonlin=None):
         super(LorentzGraphConvolution, self).__init__()
-        self.linear = LorentzLinear(manifold, in_features, out_features, use_bias, dropout, nonlin=nonlin)
-        self.agg = LorentzAgg(manifold, out_features, dropout, use_att)
+        self.linear = LorentzLinear(manifold, in_dim, out_dim, use_bias, dropout, nonlin=nonlin)
+        self.agg = LorentzAgg(manifold, out_dim, dropout, use_att)
 
     def forward(self, x, adj):
         h = self.linear(x)
@@ -24,8 +24,8 @@ class LorentzGraphConvolution(nn.Module):
 class LorentzLinear(nn.Module):
     def __init__(self,
                  manifold,
-                 in_features,
-                 out_features,
+                 in_dim,
+                 out_dim,
                  bias=True,
                  dropout=0.1,
                  scale=10,
@@ -34,8 +34,8 @@ class LorentzLinear(nn.Module):
         super().__init__()
         self.manifold = manifold
         self.nonlin = nonlin
-        self.in_features = in_features
-        self.out_features = out_features
+        self.in_features = in_dim
+        self.out_features = out_dim
         self.bias = bias
         self.weight = nn.Linear(
             self.in_features, self.out_features, bias=bias)
@@ -70,18 +70,18 @@ class LorentzAgg(nn.Module):
     Lorentz aggregation layer.
     """
 
-    def __init__(self, manifold, in_features, dropout, use_att):
+    def __init__(self, manifold, in_dim, dropout, use_att):
         super(LorentzAgg, self).__init__()
         self.manifold = manifold
 
-        self.in_features = in_features
+        self.in_features = in_dim
         self.dropout = dropout
         self.use_att = use_att
         if self.use_att:
-            self.key_linear = LorentzLinear(manifold, in_features, in_features)
-            self.query_linear = LorentzLinear(manifold, in_features, in_features)
+            self.key_linear = LorentzLinear(manifold, in_dim, in_dim)
+            self.query_linear = LorentzLinear(manifold, in_dim, in_dim)
             self.bias = nn.Parameter(torch.zeros(()) + 20)
-            self.scale = nn.Parameter(torch.zeros(()) + math.sqrt(in_features))
+            self.scale = nn.Parameter(torch.zeros(()) + math.sqrt(in_dim))
 
     def forward(self, x, adj):
         if self.use_att:
@@ -102,19 +102,18 @@ class LorentzAgg(nn.Module):
 
 
 class LorentzAssignment(nn.Module):
-    def __init__(self, manifold, in_features, hidden_features, num_assign, dropout,
-                 bias=False, use_att=False, nonlin=None, temperature=0.2):
+    def __init__(self, manifold, in_dim, hid_dim, num_assign, dropout,
+                 bias=False, temperature=0.2):
         super(LorentzAssignment, self).__init__()
         self.manifold = manifold
         self.num_assign = num_assign
-        self.assign_linear = nn.Sequential(
-            nn.Linear(in_features, num_assign, bias=bias),
-        )
+        self.assign_linear = nn.Linear(in_dim, num_assign, bias=bias)
+        nn.init.xavier_normal_(self.assign_linear.weight)
         self.temperature = temperature
-        self.key_linear = LorentzLinear(manifold, in_features, hidden_features, bias=False)
-        self.query_linear = LorentzLinear(manifold, in_features, hidden_features, bias=False)
+        self.key_linear = LorentzLinear(manifold, in_dim, hid_dim, bias=False)
+        self.query_linear = LorentzLinear(manifold, in_dim, hid_dim, bias=False)
         self.scalar_map = nn.Sequential(
-            nn.Linear(2 * hidden_features, 1, bias=bias),
+            nn.Linear(2 * hid_dim, 1, bias=bias),
             nn.LeakyReLU()
         )
         self.dropout = nn.Dropout(dropout)
@@ -135,26 +134,28 @@ class LorentzAssignment(nn.Module):
 
 
 class LSENetLayer(nn.Module):
-    def __init__(self, manifold, in_features, hidden_features, num_assign, dropout,
+    def __init__(self, manifold, in_dim, hid_dim, num_assign, dropout,
                  bias=False, use_att=False, nonlin=None, temperature=0.2):
         super(LSENetLayer, self).__init__()
         self.manifold = manifold
-        self.assignor = LorentzAssignment(manifold, in_features, hidden_features, num_assign,
-                                          use_att=use_att, bias=bias,
-                                          dropout=dropout, nonlin=nonlin, temperature=temperature)
-        self.temperature = temperature
+        self.embeder = LorentzGraphConvolution(manifold, in_dim, hid_dim,
+                                               True, dropout, use_att, nonlin)
+        self.assigner = LorentzAssignment(manifold, hid_dim,
+                                          hid_dim, num_assign,
+                                          dropout, bias, temperature)
 
     def forward(self, x, adj):
-        ass = self.assignor(x, adj)
+        x = self.embeder(x, adj)
+        ass = self.assigner(x, adj)
         support_t = ass.t() @ x
         denorm = (-self.manifold.inner(None, support_t, keepdim=True))
         denorm = denorm.abs().clamp_min(1e-8).sqrt()
-        x_assigned = support_t / denorm
+        x_par = support_t / denorm
 
-        adj = ass.t() @ adj @ ass
-        idx = adj.nonzero().t()
-        adj = torch.sparse_coo_tensor(idx, adj[idx[0], idx[1]], size=adj.shape)
-        return x_assigned, adj, ass
+        adj_par = ass.t() @ adj @ ass
+        idx = adj_par.nonzero().t()
+        adj_par = torch.sparse_coo_tensor(idx, adj_par[idx[0], idx[1]], size=adj_par.shape)
+        return x_par, adj_par, ass, x
 
 
 class IsoTransform(nn.Module):
@@ -195,31 +196,23 @@ class LorentzTransformation(nn.Module):
     """
     Input size: [N, in_dim]
     v : [1, in_dim]
-    W : [out_dim - 1, in_dim]
-    Output size: [N, out_dim]
+    W : [in_dim - 1, in_dim]
+    Output size: [N, in_dim]
     """
-    def __init__(self, in_dim, out_dim):
+    def __init__(self, in_dim):
         super(LorentzTransformation, self).__init__()
         self.v = nn.Parameter(torch.randn(1, in_dim), requires_grad=True)
-        if (out_dim - 1) > in_dim:
-            self.theta = nn.Parameter(torch.zeros(out_dim - 1 - in_dim, in_dim), requires_grad=False)
-        else:
-            self.theta = None
         diag = torch.ones(in_dim)
         diag.narrow(-1, 0, 1).mul_(-1)
         self.metric = nn.Parameter(torch.diag(diag), requires_grad=False)
         self.in_dim = in_dim
-        self.out_dim = out_dim - 1
+        self.out_dim = in_dim - 1
 
     def forward(self, x):
         vvT = self.v.t() @ self.v + self.metric
         eig, U = torch.linalg.eigh(vvT.detach())
-        if self.theta is not None:
-            L = torch.diag(eig.clamp(min=0.).sqrt())
-            W = torch.cat([L @ U.t(), self.theta], dim=0)
-        else:
-            U = U.narrow(1, self.in_dim - self.out_dim, self.out_dim)
-            L = torch.diag(eig.narrow(0, self.in_dim - self.out_dim, self.out_dim).clamp(min=0.).sqrt())
-            W = L @ U.t()
+        U = U.narrow(1, 1, self.in_dim - 1)
+        L = torch.diag(eig.narrow(0, 1, self.in_dim - 1).clamp(min=0.).sqrt())
+        W = L @ U.t()
         x = torch.concat([x @ self.v.t(), x @ W.t()], dim=-1)
         return x
