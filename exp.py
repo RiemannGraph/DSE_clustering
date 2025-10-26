@@ -70,36 +70,38 @@ class Exp:
         for epoch in range(1, self.configs.epochs + 1):
             model.train()
 
+            loss = model.hybird_loss(data, None, self.configs.gamma, self.configs.scale)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            logger.info(f"Epoch {epoch}: loss={loss.item()}")
+
             leader_levels = [0]
             follower_levels = list(range(2, model.height + 1))
 
             # ===== 阶段1: 更新 Follower =====
-            # _, ass_dict, adj_dict = model(data, freeze_levels=leader_levels)
-            # loss_follower = model.se_loss(ass_dict, adj_dict)
-            loss_follower = model.hybird_loss(data, leader_levels, self.configs.gamma)
+            _, ass_dict, adj_dict = model(data, freeze_levels=leader_levels)
+            loss_follower = model.se_loss(ass_dict, adj_dict)
             loss_follower.backward()
             optimizer.step()
 
             # ===== 阶段2: 更新 Leader =====
             optimizer.zero_grad()
-            # _, ass_dict, adj_dict = model(data, freeze_levels=follower_levels)
-            # loss_leader = model.se_loss(ass_dict, adj_dict)
-            loss_leader = model.hybird_loss(data, follower_levels, self.configs.gamma)
+            _, ass_dict, adj_dict = model(data, freeze_levels=follower_levels)
+            loss_leader = model.se_loss(ass_dict, adj_dict)
             loss_leader.backward()
             optimizer.step()
 
             logger.info(f"Epoch {epoch}: leader_loss={loss_leader.item()}, follower_loss={loss_follower.item()}")
 
-            # _, ass_dict, adj_dict = model(data)
-            # loss = model.se_loss(ass_dict, adj_dict)
-            loss = model.hybird_loss(data, None, self.configs.gamma)
+            _, ass_dict, adj_dict = model(data)
+            loss = model.se_loss(ass_dict, adj_dict)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            logger.info(f"Epoch {epoch}: loss={loss.item()}")
 
             # scheduler.step()
-
-            logger.info(f"Epoch {epoch}: loss={loss.item()}")
 
             if epoch % self.configs.eval_freq == 0:
                 logger.info("-----------------------Evaluation Start---------------------")
