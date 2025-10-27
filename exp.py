@@ -5,7 +5,8 @@ from geoopt.optim import RiemannianAdam
 from utils.eval_utils import cluster_metrics
 from data import load_data
 from logger import create_logger
-from torch.optim.lr_scheduler import LambdaLR
+from torch.optim.lr_scheduler import LambdaLR, ReduceLROnPlateau
+from torch.optim import AdamW
 import math
 
 
@@ -46,7 +47,7 @@ class Exp:
                         dropout=self.configs.dropout,
                         nonlin_str=self.configs.nonlin,
                         max_nums=self.configs.max_nums).to(device)
-            optimizer = RiemannianAdam(model.parameters(), lr=self.configs.lr, weight_decay=self.configs.w_decay)
+            optimizer = AdamW(model.parameters(), lr=self.configs.lr, weight_decay=self.configs.w_decay)
             if self.configs.task == 'Clustering':
                 nmi, ari = self.train_clu(data, model, optimizer, logger)
                 total_nmi.append(nmi)
@@ -67,39 +68,42 @@ class Exp:
         epoch_ari = []
 
         # scheduler = get_lr_scheduler(optimizer, total_epochs=4000, warmup_epochs=400)
+        scheduler = ReduceLROnPlateau(optimizer, mode='min', patience=20, threshold=1e-2)
+
         for epoch in range(1, self.configs.epochs + 1):
             model.train()
-
-            loss = model.hybird_loss(data, None, self.configs.gamma, self.configs.scale)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            logger.info(f"Epoch {epoch}: loss={loss.item()}")
 
             leader_levels = [0]
             follower_levels = list(range(2, model.height + 1))
 
-            # ===== 阶段1: 更新 Follower =====
-            _, ass_dict, adj_dict = model(data, freeze_levels=leader_levels)
-            loss_follower = model.se_loss(ass_dict, adj_dict)
+            # ===== Stage 1.1: Update Follower =====
+            loss_follower = model.se_loss(data, leader_levels)
             loss_follower.backward()
             optimizer.step()
 
-            # ===== 阶段2: 更新 Leader =====
+            # ===== Stage 1.2: Update Leader =====
             optimizer.zero_grad()
-            _, ass_dict, adj_dict = model(data, freeze_levels=follower_levels)
-            loss_leader = model.se_loss(ass_dict, adj_dict)
+            loss_leader = model.se_loss(data, follower_levels)
             loss_leader.backward()
             optimizer.step()
 
-            logger.info(f"Epoch {epoch}: leader_loss={loss_leader.item()}, follower_loss={loss_follower.item()}")
+            logger.info(f"[Stage 1] Epoch {epoch}: leader={loss_leader.item():.4f}, follower={loss_follower.item():.4f}")
 
-            _, ass_dict, adj_dict = model(data)
-            loss = model.se_loss(ass_dict, adj_dict)
+            # ===== Stage 2: Update Global =====
+            loss = model.se_loss(data)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            logger.info(f"Epoch {epoch}: loss={loss.item()}")
+            logger.info(f"[Stage2] Epoch {epoch}: loss={loss.item():.4f}")
+
+            # ===== Stage 3: Refine leaf embedding =====
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = 0.0001
+            loss = model.cl_loss(data)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            logger.info(f"[Stage3] Epoch {epoch}: loss={loss.item()}")
 
             # scheduler.step()
 
