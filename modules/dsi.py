@@ -15,7 +15,7 @@ class DSI(nn.Module):
         super(DSI, self).__init__()
         self.num_nodes = num_nodes
         self.height = len(max_nums) + 1
-        self.manifold = Lorentz(k=0.93)
+        self.manifold = Lorentz(k=0.95)
         self.encoder = LSENet(self.manifold, in_dim, hid_dim, max_nums, temperature, dropout, nonlin_str)
         self.lorentz_proj = LorentzTransformation(hid_dim + 1)
         self.temperature = temperature
