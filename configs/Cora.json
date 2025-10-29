@@ -7,7 +7,7 @@
     "version": "run",
     "log_path": "./results/Cora.log",
     "epochs": 2000,
-    "lr": 0.0005,
+    "lr": 0.001,
     "w_decay": 0.0,
     "decay_rate": null,
     "max_nums": [
