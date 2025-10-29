@@ -68,7 +68,7 @@ class DSI(nn.Module):
         tree_coord_aug_dict, ass_aug_dict, adj_aug_dict = self.encoder(data.x, data.adj_aug, freeze_levels)
         z_leaf = self.lorentz_proj(tree_coord_dict[self.height])
         z_leaf_aug = self.lorentz_proj(tree_coord_aug_dict[self.height])
-        cl_loss = self._tree_cl_loss(z_leaf, z_leaf_aug, data.edge_index, self.tau, neg_ratio=0.3)
+        cl_loss = self._tree_cl_loss(z_leaf, z_leaf_aug, self.tau)
         return cl_loss
 
     def se_loss(self, data, freeze_levels=None, eps=1e-6):
@@ -97,21 +97,10 @@ class DSI(nn.Module):
         se_loss = -1 / vol_G * se_loss
         return se_loss
 
-    def _tree_cl_loss(self, z1, z2, edge_index, tau=2.0, neg_ratio=0.1):
-        device = z1.device
+    def _tree_cl_loss(self, z1, z2, tau=2.0):
 
-        pos_sim = torch.clamp(2.0 + 2.0 * self.manifold.cinner(z1, z2), min=-1.0, max=1.0)
-        pos_exp = torch.exp(pos_sim / tau)
-
-        row, col = edge_index
-        num_edges = row.size(0)
-        neg_sample_size = max(1, int(num_edges * neg_ratio))
-
-        neg_idx = torch.randint(0, col.size(0), (neg_sample_size,), device=device)
-        neg_row, neg_col = row[neg_idx], col[neg_idx]
-
-        neg_sim = torch.clamp(2.0 + 2.0 * self.manifold.cinner(z1[neg_row], z2[neg_col]), min=-1.0, max=1.0)
-        neg_exp = torch.exp(neg_sim / tau).sum()
-
-        loss = -torch.log(pos_exp / (pos_exp + neg_exp))
+        sim = torch.clamp(2.0 + 2.0 * self.manifold.cinner(z1, z2), min=-2.0, max=2.0)  # [N, N]
+        sim_exp = torch.exp(sim / tau)
+        pos_exp = sim_exp.diag()    # [N, ]
+        loss = -torch.log(pos_exp / sim_exp.sum(-1))
         return loss.mean()

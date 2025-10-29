@@ -112,10 +112,6 @@ class LorentzAssignment(nn.Module):
         self.temperature = temperature
         self.key_linear = LorentzLinear(manifold, in_dim, hid_dim, bias=False)
         self.query_linear = LorentzLinear(manifold, in_dim, hid_dim, bias=False)
-        self.scalar_map = nn.Sequential(
-            nn.Linear(2 * hid_dim, 1, bias=bias),
-            nn.LeakyReLU()
-        )
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x, adj):
@@ -124,9 +120,8 @@ class LorentzAssignment(nn.Module):
         k = self.key_linear(x)
         edge_index = adj.coalesce().indices()
         src, dst = edge_index[0], edge_index[1]
-        qk = torch.cat([q[src], k[dst]], dim=-1)
-        score = self.scalar_map(qk).squeeze(-1)
-        score = scatter_softmax(score, src, dim=-1)
+        score = self.manifold.dist(q[src], k[dst])
+        score = scatter_softmax(-score, src, dim=-1)
         att = torch.sparse_coo_tensor(edge_index, score, size=(x.shape[0], x.shape[0])).to(x.device)
         ass = torch.matmul(att, ass)   # (N_k, N_{k-1})
         ass = gumbel_softmax(torch.log(ass + 1e-6), temperature=self.temperature)
@@ -191,6 +186,7 @@ class IsoTransform(nn.Module):
         A = normalize_adj(A, sparse=True)
         A = self.alpha * A + (1 - self.alpha) * raw_adj
         return A
+
 
 class LorentzTransformation(nn.Module):
     """
