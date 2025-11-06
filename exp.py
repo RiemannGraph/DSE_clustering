@@ -57,37 +57,11 @@ class Exp:
         for epoch in range(1, self.configs.epochs + 1):
             model.train()
 
-            leader_levels = [0]
-            follower_levels = list(range(2, model.height + 1))
-
-            # ===== Stage 1.1: Update Follower =====
-            loss_follower = model.se_loss(data, leader_levels)
-            loss_follower.backward()
-            optimizer.step()
-
-            # ===== Stage 1.2: Update Leader =====
-            optimizer.zero_grad()
-            loss_leader = model.se_loss(data, follower_levels)
-            loss_leader.backward()
-            optimizer.step()
-
-            logger.info(f"[Stage 1] Epoch {epoch}: leader={loss_leader.item():.4f}, follower={loss_follower.item():.4f}")
-
-            # ===== Stage 2: Update Global =====
             loss = model.se_loss(data)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
             logger.info(f"[Stage2] Epoch {epoch}: loss={loss.item():.4f}")
-
-            # ===== Stage 3: Refine leaf embedding =====
-            for param_group in optimizer.param_groups:
-                param_group['lr'] = 0.0001
-            loss = model.cl_loss(data)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            logger.info(f"[Stage3] Epoch {epoch}: loss={loss.item()}")
 
             if epoch % self.configs.eval_freq == 0:
                 logger.info("-----------------------Evaluation Start---------------------")

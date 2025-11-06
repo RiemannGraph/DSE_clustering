@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from utils.model_utils import gumbel_softmax
+from utils.model_utils import gumbel_softmax, graph_top_K
 from manifold.lorentz import Lorentz
 from modules.layers import LorentzTransformation
 from modules.model import LSENet
@@ -15,16 +15,16 @@ class DSI(nn.Module):
         super(DSI, self).__init__()
         self.num_nodes = num_nodes
         self.height = len(max_nums) + 1
-        self.manifold = Lorentz(k=0.97)
+        self.manifold = Lorentz()
         self.encoder = LSENet(self.manifold, in_dim, hid_dim, max_nums, temperature, dropout, nonlin_str)
         self.lorentz_proj = LorentzTransformation(hid_dim + 1)
         self.temperature = temperature
         self.tau = tau
 
-    def forward(self, data, freeze_levels=None):
+    def forward(self, data):
         features = data.x
         adj = data.adj.clone()
-        tree_coord_dict, ass_dict, adj_dict = self.encoder(features, adj, freeze_levels=freeze_levels)
+        tree_coord_dict, ass_dict, adj_dict = self.encoder(features, adj)
         return tree_coord_dict, ass_dict, adj_dict
 
     def get_cluster_results(self, data):
@@ -63,20 +63,14 @@ class DSI(nn.Module):
         clu_res[err_idx] = fixed_res
         return clu_res
 
-    def cl_loss(self, data, freeze_levels=None):
-        tree_coord_dict, ass_dict, adj_dict = self.encoder(data.x, data.adj, freeze_levels)
-        tree_coord_aug_dict, ass_aug_dict, adj_aug_dict = self.encoder(data.x, data.adj_aug, freeze_levels)
-        z_leaf = self.lorentz_proj(tree_coord_dict[self.height])
-        z_leaf_aug = self.lorentz_proj(tree_coord_aug_dict[self.height])
-        cl_loss = self._tree_cl_loss(z_leaf, z_leaf_aug, self.tau)
-        return cl_loss
-
-    def se_loss(self, data, freeze_levels=None, eps=1e-6):
-        tree_coord_dict, ass_dict, adj_dict = self.encoder(data.x, data.adj, freeze_levels)
-        tree_coord_aug_dict, ass_aug_dict, adj_aug_dict = self.encoder(data.x, data.adj_aug, freeze_levels)
-        loss = self._si_loss(ass_dict, adj_dict, eps)
-        aug_loss = self._si_loss(ass_aug_dict, adj_aug_dict, eps)
-        return loss + aug_loss
+    def se_loss(self, data, eps=1e-6):
+        z_leaf = self.encoder.embed_leaf(data.x, data.adj)
+        # z_leaf = self.lorentz_proj(z_leaf)
+        neg_dist2 = 2 + 2 * self.manifold.cinner(z_leaf, z_leaf)
+        adj_aug = graph_top_K(torch.softmax(neg_dist2/ self.tau, dim=-1), k=8)
+        tree_coord_aug_dict, ass_aug_dict, adj_aug_dict = self.encoder(data.x, 0.01 * adj_aug + data.adj)
+        loss = self._si_loss(ass_aug_dict, adj_aug_dict, eps)
+        return loss
 
     def _si_loss(self, ass_dict: dict, adj_dict: dict, eps: float = 1e-6):
         se_loss = 0
@@ -96,11 +90,3 @@ class DSI(nn.Module):
             se_loss += torch.sum(delta_vol * log_vol_ratio_k)
         se_loss = -1 / vol_G * se_loss
         return se_loss
-
-    def _tree_cl_loss(self, z1, z2, tau=2.0):
-
-        sim = torch.clamp(2.0 + 2.0 * self.manifold.cinner(z1, z2), min=-2.0, max=2.0)  # [N, N]
-        sim_exp = torch.exp(sim / tau)
-        pos_exp = sim_exp.diag()    # [N, ]
-        loss = -torch.log(pos_exp / sim_exp.sum(-1))
-        return loss.mean()

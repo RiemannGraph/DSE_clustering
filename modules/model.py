@@ -17,6 +17,9 @@ class LSENet(nn.Module):
         self.input_proj = LorentzGraphConvolution(manifold, in_dim + 1, hid_dim + 1,
                                                   True, dropout, False,
                                                   select_activation(nonlin_str))
+        self.input_proj2 = LorentzGraphConvolution(manifold, hid_dim + 1, hid_dim + 1,
+                                                  True, dropout, False,
+                                                  select_activation(nonlin_str))
         self.dropout = nn.Dropout(dropout)
 
         # Build layers bottom-up: layer[0] = leaf → level H-1; layer[-1] = level 1 → root
@@ -35,18 +38,15 @@ class LSENet(nn.Module):
         o = torch.zeros_like(x[:, :1])                # (N, 1)
         x = torch.cat([o, x], dim=1)           # (N, d+1)
         x = self.manifold.expmap0(x)                  # project to Lorentz
-        x = self.dropout(self.input_proj(x, adj))  # (N, d + 1)
+        x = self.input_proj(x, adj)  # (N, d + 1)
+        x = self.input_proj2(x, adj)
         return x
 
-    def forward(self, x, adj, freeze_levels=None):
+    def forward(self, x, adj):
         """
         Args:
             x: raw node features (N, D)
             adj: sparse adjacency
-            freeze_levels: list of level indices to freeze (e.g., [0,1] for leader levels)
-                - Level H = leaf (not a layer)
-                - Layer i corresponds to assignment from level (H - i) → (H - i - 1)
-                - So layer 0 → level H → H-1; layer -1 → level 1 → 0 (root)
         """
         z = self.embed_leaf(x, adj)
         tree_coord_dict = {self.height: z}
@@ -57,12 +57,7 @@ class LSENet(nn.Module):
         current_adj = adj
 
         for i, layer in enumerate(self.layers):
-            # Optional: skip gradient if this layer is frozen
-            if freeze_levels is not None and (self.height - i - 1) in freeze_levels:
-                with torch.no_grad():
-                    z_par, adj_par, ass, z_curr = layer(current_z, current_adj)
-            else:
-                z_par, adj_par, ass, z_curr = layer(current_z, current_adj)
+            z_par, adj_par, ass, z_curr = layer(current_z, current_adj)
 
             level_curr = self.height - i
             level_par = self.height - i - 1

@@ -86,9 +86,10 @@ def gumbel_sigmoid(logits, tau: float = 1, hard: bool = False, threshold: float 
 
 def graph_top_K(dense_adj, k):
     assert k < dense_adj.shape[-1]
-    _, indices = dense_adj.topk(k=k, dim=-1)
+    _, indices = dense_adj.topk(k=k + 1, dim=-1)
     mask = torch.zeros(dense_adj.shape).bool().to(dense_adj.device)
     mask[torch.arange(dense_adj.shape[0])[:, None], indices] = True
+    mask[torch.arange(dense_adj.shape[0]), torch.arange(dense_adj.shape[0])] = False
     sparse_adj = torch.masked_fill(dense_adj, ~mask, value=0.).to_sparse_coo()
     return sparse_adj
 
