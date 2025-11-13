@@ -20,7 +20,7 @@ torch.cuda.manual_seed_all(seed)
 parser = argparse.ArgumentParser(description='Lorentz Structural Entropy')
 
 # Experiment settings
-parser.add_argument('--dataset', type=str, default='Photo')
+parser.add_argument('--dataset', type=str, default='KarateClub')
 parser.add_argument('--task', type=str, default='Clustering',
                     choices=['Clustering'])
 parser.add_argument('--root_path', type=str, default='datasets')
@@ -32,16 +32,14 @@ parser.add_argument('--log_path', type=str, default="./results/FootBall.log")
 parser.add_argument('--epochs', type=int, default=1500)
 parser.add_argument('--lr', type=float, default=1e-3)
 parser.add_argument('--w_decay', type=float, default=1e-2)
-parser.add_argument('--decay_rate', type=float, default=None)
-parser.add_argument('--max_nums', type=int, nargs='+', default=[10], help="such as [50, 10]")
-parser.add_argument('--embed_dim', type=int, default=512)
-parser.add_argument('--hidden_dim_enc', type=int, default=512)
-parser.add_argument('--hidden_dim', type=int, default=512)
+parser.add_argument('--max_nums', type=int, nargs='+', default=[4], help="such as [50, 10]")
+parser.add_argument('--hid_dim', type=int, default=512)
 parser.add_argument('--dropout', type=float, default=0.1)
 parser.add_argument('--nonlin', type=str, default="leaky_relu")
 parser.add_argument('--temperature', type=float, default=0.9)
 parser.add_argument('--n_cluster_trials', type=int, default=3)
-
+parser.add_argument('--alpha', type=float, default=0.01)
+parser.add_argument('--knn', type=int, default=8)
 parser.add_argument("--epsInt", type=int, default=8)
 
 parser.add_argument('--patience', type=int, default=5, help='early stopping patience')
@@ -58,11 +56,11 @@ configs = parser.parse_args()
 # with open(f'./configs/{configs.dataset}.json', 'wt') as f:
 #     json.dump(vars(configs), f, indent=4)
 
-configs_dict = vars(configs)
-with open(f'./configs/{configs.dataset}.json', 'rt') as f:
-    configs_dict.update(json.load(f))
-configs = DotDict(configs_dict)
-f.close()
+# configs_dict = vars(configs)
+# with open(f'./configs/{configs.dataset}.json', 'rt') as f:
+#     configs_dict.update(json.load(f))
+# configs = DotDict(configs_dict)
+# f.close()
 
 log_path = f"./results/{configs.version}/{configs.dataset}.log"
 configs.log_path = log_path

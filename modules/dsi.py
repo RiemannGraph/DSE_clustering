@@ -11,7 +11,7 @@ EPS = 1e-6
 
 class DSI(nn.Module):
     def __init__(self, in_dim, hid_dim, num_nodes, max_nums, temperature=0.2,
-                 dropout=0.5, nonlin_str='relu', tau=1.0):
+                 dropout=0.5, nonlin_str='relu', tau=1.0, alpha=0.01, knn=8):
         super(DSI, self).__init__()
         self.num_nodes = num_nodes
         self.height = len(max_nums) + 1
@@ -20,6 +20,8 @@ class DSI(nn.Module):
         self.lorentz_proj = LorentzBoost(hid_dim + 1)
         self.temperature = temperature
         self.tau = tau
+        self.alpha = alpha
+        self.knn = knn
 
     def forward(self, data):
         features = data.x
@@ -67,8 +69,8 @@ class DSI(nn.Module):
         z_leaf = self.encoder.embed_leaf(data.x, data.adj)
         z_leaf = self.lorentz_proj(z_leaf)
         neg_dist2 = 2 + 2 * self.manifold.cinner(z_leaf, z_leaf)
-        adj_aug = graph_top_K(torch.softmax(neg_dist2/ self.tau, dim=-1), k=8)
-        tree_coord_aug_dict, ass_aug_dict, adj_aug_dict = self.encoder(data.x, 0.01 * adj_aug + data.adj)
+        adj_aug = graph_top_K(torch.softmax(neg_dist2/ self.tau, dim=-1), k=self.knn)
+        tree_coord_aug_dict, ass_aug_dict, adj_aug_dict = self.encoder(data.x, self.alpha * adj_aug + data.adj)
         loss = self._si_loss(ass_aug_dict, adj_aug_dict, eps)
         return loss
 
