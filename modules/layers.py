@@ -153,27 +153,35 @@ class LSENetLayer(nn.Module):
         return x_par, adj_par, ass, x
 
 
-class LorentzTransformation(nn.Module):
+class LorentzBoost(nn.Module):
     """
-    Input size: [N, in_dim]
-    v : [1, in_dim]
-    W : [in_dim - 1, in_dim]
-    Output size: [N, in_dim]
+    Implements a learnable Lorentz boost transformation without eigendecomposition.
+    Input: x in Lorentz model L^{d} (shape: [..., d+1])
+    Output: L(x) in L^{d} (same shape)
     """
-    def __init__(self, in_dim):
-        super(LorentzTransformation, self).__init__()
-        self.v = nn.Parameter(torch.randn(1, in_dim), requires_grad=True)
-        diag = torch.ones(in_dim)
-        diag.narrow(-1, 0, 1).mul_(-1)
-        self.metric = nn.Parameter(torch.diag(diag), requires_grad=False)
+    def __init__(self, in_dim):  # in_dim = d+1
+        super().__init__()
         self.in_dim = in_dim
-        self.out_dim = in_dim - 1
+        # Parameterize boost velocity beta in R^d (spatial part)
+        self.beta = nn.Parameter(torch.randn(in_dim - 1) * 0.01)  # small init
 
     def forward(self, x):
-        vvT = self.v.t() @ self.v + self.metric
-        eig, U = torch.linalg.eigh(vvT.detach())
-        U = U.narrow(1, 1, self.in_dim - 1)
-        L = torch.diag(eig.narrow(0, 1, self.in_dim - 1).clamp(min=0.).sqrt())
-        W = L @ U.t()
-        x = torch.concat([x @ self.v.t(), x @ W.t()], dim=-1)
-        return x
+        """
+        x: [..., d+1], assumed to be in Lorentz model (x0 > 0, <x,x>_L = -1)
+        Returns L(x): [..., d+1] in Lorentz model
+        """
+        d = self.in_dim - 1
+        beta = self.beta  # ensure |beta| < 1
+        beta_norm_sq = (beta ** 2).sum()
+        gamma = 1.0 / torch.sqrt(1.0 - beta_norm_sq + 1e-8)  # Lorentz factor
+
+        # Construct boost matrix L (d+1, d+1)
+        L = torch.eye(self.in_dim, device=x.device)
+        L[0, 0] = gamma
+        L[0, 1:] = -gamma * beta
+        L[1:, 0] = -gamma * beta
+        L[1:, 1:] += (gamma - 1) * torch.outer(beta, beta) / (beta_norm_sq + 1e-8)
+
+        # Apply transformation
+        Lx = torch.einsum('ij,...j->...i', L, x)
+        return Lx

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from utils.model_utils import gumbel_softmax, graph_top_K
 from manifold.lorentz import Lorentz
-from modules.layers import LorentzTransformation
+from modules.layers import LorentzBoost
 from modules.model import LSENet
 
 MIN_NORM = 1e-15
@@ -17,7 +17,7 @@ class DSI(nn.Module):
         self.height = len(max_nums) + 1
         self.manifold = Lorentz()
         self.encoder = LSENet(self.manifold, in_dim, hid_dim, max_nums, temperature, dropout, nonlin_str)
-        self.lorentz_proj = LorentzTransformation(hid_dim + 1)
+        self.lorentz_proj = LorentzBoost(hid_dim + 1)
         self.temperature = temperature
         self.tau = tau
 
@@ -65,7 +65,7 @@ class DSI(nn.Module):
 
     def se_loss(self, data, eps=1e-6):
         z_leaf = self.encoder.embed_leaf(data.x, data.adj)
-        # z_leaf = self.lorentz_proj(z_leaf)
+        z_leaf = self.lorentz_proj(z_leaf)
         neg_dist2 = 2 + 2 * self.manifold.cinner(z_leaf, z_leaf)
         adj_aug = graph_top_K(torch.softmax(neg_dist2/ self.tau, dim=-1), k=8)
         tree_coord_aug_dict, ass_aug_dict, adj_aug_dict = self.encoder(data.x, 0.01 * adj_aug + data.adj)
